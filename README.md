@@ -69,13 +69,31 @@ The porting strategy, the solution layout and the phase plan are documented in
 
 | Phase | Scope | Status |
 |---|---|---|
-| 0 | Repository, solution, projects, test fixtures | **done** |
-| 1 | ChargyLib, data structures, i18n, validation rules | planned |
-| 2 | Cryptography (ECDSA, EdDSA, ML-DSA), ACrypt, signed JSON | planned |
-| 3 | Content format detection, archives, PDF/A-3, QR codes | planned |
-| 4 | The charge transparency data formats | planned |
-| 5 | Charge Transparency Live Link, URL resolution | planned |
-| 6 | Documentation, samples, packaging | planned |
+| 0 | Repository, solution, projects, test fixtures | ✅ **done** |
+| 1 | ChargyLib, data structures, i18n, validation rules | 🚧 in progress |
+| 2 | Cryptography (ECDSA, EdDSA, ML-DSA), ACrypt, signed JSON | ⬜ planned |
+| 3 | Content format detection, archives, PDF/A-3, QR codes | ⬜ planned |
+| 4 | The charge transparency data formats | ⬜ planned |
+| 5 | Charge Transparency Live Link, URL resolution | ⬜ planned |
+| 6 | Documentation, samples, packaging | ⬜ planned |
+
+Phase 1 in detail:
+
+| Component | Status |
+|---|---|
+| `ChargyLib` — hex, OBIS, timestamps, signature buffer writers | ✅ **done** |
+| Verification results, severity levels, `Warning`, `Error`, `CryptoResult` | ✅ **done** |
+| `I18NDictionary` — 286 messages, language fallback | ✅ **done** |
+| `ValidationRules` — plausibility rules | ✅ **done** |
+| `ChargeTransparencyRecord`, `ChargingSession`, `Measurement`, `MeasurementValue` | ✅ **done** |
+| `Signature`, `SignatureInfos`, `PublicKey`, `PublicKeySignature`, `OIDInfo` | ✅ **done** |
+| `Address`, contacts, device info, legal compliance | ✅ **done** |
+| `EnergyMeter`, `EVSE`, `ChargingStation`, `ChargingPool`, `ChargingStationOperator` | ✅ **done** |
+| `ChargingTariff`, `ParkingTariff` and the OCPI tariff elements | ✅ **done** |
+| Costs, authorization, parking, legally relevant log messages | ✅ **done** |
+| `SimpleURL`, `ChargeTransparencyLiveLink`, `FileInfo` | ✅ **done** |
+| Resolved object references in `ChargingSession` | 🚧 in progress |
+| The ported `data-structures` / `chargyInterfaces` test cases | ⬜ planned |
 
 
 ## Related projects

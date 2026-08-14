@@ -349,7 +349,7 @@ as a hard, automatically-checked contract — not a hope.
 Each phase ends with a compiling solution and green tests, so progress is verifiable
 at every step.
 
-### Phase 0 — Repository & solution scaffolding ✔ done
+### Phase 0 — Repository & solution scaffolding ✅ **done**
 Git repo, AGPL `LICENSE`, `README.md`, `SECURITY.md`, `CONTRIBUTING.md`,
 `CODE_OF_CONDUCT.md`, `.gitignore`, `.gitattributes`, GitHub Actions workflow
 (`.github/workflows/ci.yml`, which checks out Styx and Hermod as siblings),
@@ -376,26 +376,26 @@ Two additions over the original plan:
 > as the reference for the C# table-driven fixtures written in Phase 1 and Phase 4,
 > and are part of the 203 files asserted above.
 
-### Phase 1 — Foundation
+### Phase 1 — Foundation 🚧 in progress
 `ChargyLib` (hex, byte, OBIS, timestamp helpers — Span-based), the complete
 `DataStructures/` model with `ToJSON()`/`TryParse()`, results & enums, i18n dictionary
 loading, validation rules.
 *Exit:* `DataStructureTests`, `chargyInterfacesTests` green (~15 cases).
 
-### Phase 2 — Cryptography
+### Phase 2 — Cryptography ⬜
 `ISignatureSuite` + ECDSA/EdDSA/ML-DSA suites over BouncyCastle, `Secp224k1`,
 `PublicKeyParser` (DER/PEM/HEX), `CryptoUtils` signed-JSON messages on top of
 `Illias.CanonicalJSON`, `ACrypt` base class, `VerificationTrace`.
 *Exit:* `CryptoUtilsTests`, `CanonicalJSONTests`, `PublicKeyFilesTests` green (~24 cases).
 
-### Phase 3 — I/O & container pipeline
+### Phase 3 — I/O & container pipeline ⬜
 `ContentFormatDetector` (the `DetectAndConvertContentFormat` state machine), archive
 readers (zip/tar/gz/bz2), `IPDFAttachmentExtractor`, `IQRCodeDecoder`, XML/JSON format
 dispatch, `SimpleURL`, `ChargeTransparencyLiveLink`.
 *Exit:* `SimpleURLsTests`, `ChargeTransparencyLiveLinkTests` green; archives/PDF/QR
 extraction proven against binary fixtures (~15 cases).
 
-### Phase 4 — Formats, one directory at a time
+### Phase 4 — Formats, one directory at a time ⬜
 Ordered so each step unlocks the largest number of golden tests with the least new
 infrastructure. Every step is a self-contained increment: format + its `ACrypt` + its tests.
 
@@ -409,10 +409,10 @@ infrastructure. Every step is a self-contained increment: format + its `ACrypt` 
 8. **PTB container + XMLContainer + KEBA** → (3)
 9. **QIDigital DCC/DCoA/DCoC + OCPI** → `OCPITests`
 
-### Phase 5 — Live link & online features
+### Phase 5 — Live link & online features ⬜
 Hermod-based `IURLResolver`, live-link transports (HTTPS, HTTP SSE, WebSocket), TOTP.
 
-### Phase 6 — Polish & release
+### Phase 6 — Polish & release ⬜
 XML documentation comments on the whole public surface, `README.md` with usage examples,
 a small sample/CLI project for verifying a file from the command line, `Directory.Build.props`
 with the shared package metadata, optional NuGet packaging.
