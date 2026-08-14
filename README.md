@@ -92,8 +92,9 @@ Phase 1 in detail:
 | `ChargingTariff`, `ParkingTariff` and the OCPI tariff elements | ✅ **done** |
 | Costs, authorization, parking, legally relevant log messages | ✅ **done** |
 | `SimpleURL`, `ChargeTransparencyLiveLink`, `FileInfo` | ✅ **done** |
-| Resolved object references in `ChargingSession` | 🚧 in progress |
-| The ported `data-structures` / `chargyInterfaces` test cases | ⬜ planned |
+| Resolved object references in `ChargingSession` | ✅ **done** |
+| `EMobilityProvider`, `Contract`, and the full record collections | ✅ **done** |
+| The ported `data-structures` / `chargyInterfaces` test cases | 🚧 in progress |
 
 
 ## Related projects

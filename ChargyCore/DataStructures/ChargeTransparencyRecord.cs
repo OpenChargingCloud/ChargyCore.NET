@@ -61,10 +61,18 @@ namespace cloud.charging.open.chargy
 
         #region Data
 
-        private readonly List<ChargingSession>  chargingSessions  = [.. ChargingSessions ?? []];
-        private readonly List<PublicKey>        publicKeys        = [.. PublicKeys       ?? []];
-        private readonly List<Error>            errors            = [];
-        private readonly List<Warning>          warnings          = [];
+        private readonly List<ChargingSession>          chargingSessions          = [.. ChargingSessions ?? []];
+        private readonly List<PublicKey>                publicKeys                = [.. PublicKeys       ?? []];
+        private readonly List<Error>                    errors                    = [];
+        private readonly List<Warning>                  warnings                  = [];
+        private readonly List<ChargingStationOperator>  chargingStationOperators  = [];
+        private readonly List<ChargingPool>             chargingPools             = [];
+        private readonly List<ChargingStation>          chargingStations          = [];
+        private readonly List<ChargingTariff>           chargingTariffs           = [];
+        private readonly List<EMobilityProvider>        eMobilityProviders        = [];
+        private readonly List<MediationService>         mediationServices         = [];
+        private readonly List<Contract>                 contracts                 = [];
+        private readonly List<ExtendedFileInfo>         invalidDataSets           = [];
 
         #endregion
 
@@ -107,6 +115,44 @@ namespace cloud.charging.open.chargy
         public IReadOnlyList<Warning>           Warnings
             => warnings;
 
+        /// <summary>The charging station operators of this record.</summary>
+        public IReadOnlyList<ChargingStationOperator>  ChargingStationOperators
+            => chargingStationOperators;
+
+        /// <summary>Charging pools that are not attached to an operator.</summary>
+        public IReadOnlyList<ChargingPool>             ChargingPools
+            => chargingPools;
+
+        /// <summary>Charging stations that are not attached to a pool or an operator.</summary>
+        public IReadOnlyList<ChargingStation>          ChargingStations
+            => chargingStations;
+
+        /// <summary>Charging tariffs that apply to the whole record.</summary>
+        public IReadOnlyList<ChargingTariff>           ChargingTariffs
+            => chargingTariffs;
+
+        /// <summary>The e-mobility providers of this record.</summary>
+        public IReadOnlyList<EMobilityProvider>        EMobilityProviders
+            => eMobilityProviders;
+
+        /// <summary>The mediation services an EV driver can turn to.</summary>
+        public IReadOnlyList<MediationService>         MediationServices
+            => mediationServices;
+
+        /// <summary>The charging contracts this record was produced under.</summary>
+        public IReadOnlyList<Contract>                 Contracts
+            => contracts;
+
+        /// <summary>
+        /// The input files that could not be turned into charging sessions.
+        ///
+        /// These are kept rather than dropped, so that an application can tell an
+        /// EV driver which of the files they provided were not understood, instead
+        /// of silently verifying only some of them.
+        /// </summary>
+        public IReadOnlyList<ExtendedFileInfo>         InvalidDataSets
+            => invalidDataSets;
+
         /// <summary>The result of verifying this record as a whole.</summary>
         public SessionCryptoResult?             VerificationResult    { get; set; }
 
@@ -136,6 +182,90 @@ namespace cloud.charging.open.chargy
         public ChargeTransparencyRecord AddPublicKey(PublicKey PublicKey)
         {
             publicKeys.Add(PublicKey);
+            return this;
+        }
+
+        #endregion
+
+        #region Add...             (entities)
+
+        /// <summary>
+        /// Add a charging station operator to this charge transparency record.
+        /// </summary>
+        /// <param name="ChargingStationOperator">A charging station operator.</param>
+        public ChargeTransparencyRecord AddChargingStationOperator(ChargingStationOperator ChargingStationOperator)
+        {
+            chargingStationOperators.Add(ChargingStationOperator);
+            return this;
+        }
+
+        /// <summary>
+        /// Add a charging pool to this charge transparency record.
+        /// </summary>
+        /// <param name="ChargingPool">A charging pool.</param>
+        public ChargeTransparencyRecord AddChargingPool(ChargingPool ChargingPool)
+        {
+            chargingPools.Add(ChargingPool);
+            return this;
+        }
+
+        /// <summary>
+        /// Add a charging station to this charge transparency record.
+        /// </summary>
+        /// <param name="ChargingStation">A charging station.</param>
+        public ChargeTransparencyRecord AddChargingStation(ChargingStation ChargingStation)
+        {
+            chargingStations.Add(ChargingStation);
+            return this;
+        }
+
+        /// <summary>
+        /// Add a charging tariff to this charge transparency record.
+        /// </summary>
+        /// <param name="ChargingTariff">A charging tariff.</param>
+        public ChargeTransparencyRecord AddChargingTariff(ChargingTariff ChargingTariff)
+        {
+            chargingTariffs.Add(ChargingTariff);
+            return this;
+        }
+
+        /// <summary>
+        /// Add an e-mobility provider to this charge transparency record.
+        /// </summary>
+        /// <param name="EMobilityProvider">An e-mobility provider.</param>
+        public ChargeTransparencyRecord AddEMobilityProvider(EMobilityProvider EMobilityProvider)
+        {
+            eMobilityProviders.Add(EMobilityProvider);
+            return this;
+        }
+
+        /// <summary>
+        /// Add a mediation service to this charge transparency record.
+        /// </summary>
+        /// <param name="MediationService">A mediation service.</param>
+        public ChargeTransparencyRecord AddMediationService(MediationService MediationService)
+        {
+            mediationServices.Add(MediationService);
+            return this;
+        }
+
+        /// <summary>
+        /// Add a contract to this charge transparency record.
+        /// </summary>
+        /// <param name="Contract">A contract.</param>
+        public ChargeTransparencyRecord AddContract(Contract Contract)
+        {
+            contracts.Add(Contract);
+            return this;
+        }
+
+        /// <summary>
+        /// Add an input file that could not be turned into charging sessions.
+        /// </summary>
+        /// <param name="InvalidDataSet">An input file that was not understood.</param>
+        public ChargeTransparencyRecord AddInvalidDataSet(ExtendedFileInfo InvalidDataSet)
+        {
+            invalidDataSets.Add(InvalidDataSet);
             return this;
         }
 
@@ -228,6 +358,39 @@ namespace cloud.charging.open.chargy
                     if (PublicKey.TryParse(publicKeyJSON, out var publicKey))
                         record.AddPublicKey(publicKey!);
 
+            if (JSON["chargingStationOperators"] is JArray operatorArray)
+                foreach (var operatorJSON in operatorArray.OfType<JObject>())
+                    if (ChargingStationOperator.TryParse(operatorJSON, out var chargingStationOperator))
+                        record.AddChargingStationOperator(chargingStationOperator!);
+
+            if (JSON["chargingPools"]    is JArray poolArray)
+                foreach (var poolJSON in poolArray.OfType<JObject>())
+                    if (ChargingPool.   TryParse(poolJSON,    out var chargingPool))
+                        record.AddChargingPool(chargingPool!);
+
+            if (JSON["chargingStations"] is JArray stationArray)
+                foreach (var stationJSON in stationArray.OfType<JObject>())
+                    if (ChargingStation.TryParse(stationJSON, out var chargingStation))
+                        record.AddChargingStation(chargingStation!);
+
+            foreach (var tariff in EntityLists.ParseChargingTariffs(JSON["chargingTariffs"]))
+                record.AddChargingTariff(tariff);
+
+            if (JSON["eMobilityProviders"] is JArray providerArray)
+                foreach (var providerJSON in providerArray.OfType<JObject>())
+                    if (EMobilityProvider.TryParse(providerJSON, out var eMobilityProvider))
+                        record.AddEMobilityProvider(eMobilityProvider!);
+
+            if (JSON["mediationServices"]  is JArray mediationServiceArray)
+                foreach (var mediationServiceJSON in mediationServiceArray.OfType<JObject>())
+                    if (MediationService. TryParse(mediationServiceJSON, out var mediationService))
+                        record.AddMediationService(mediationService!);
+
+            if (JSON["contracts"]          is JArray contractArray)
+                foreach (var contractJSON in contractArray.OfType<JObject>())
+                    if (Contract.         TryParse(contractJSON, out var contract))
+                        record.AddContract(contract!);
+
             ChargeTransparencyRecord = record;
 
             return true;
@@ -262,6 +425,27 @@ namespace cloud.charging.open.chargy
 
             if (Description.IsNotNullOrEmpty())
                 json.Add(new JProperty("description",         Description.ToJSON()));
+
+            if (contracts.               Count > 0)
+                json.Add(new JProperty("contracts",                 new JArray(contracts.               Select(contract         => contract.        ToJSON()))));
+
+            if (chargingStationOperators.Count > 0)
+                json.Add(new JProperty("chargingStationOperators",  new JArray(chargingStationOperators.Select(csOperator       => csOperator.      ToJSON()))));
+
+            if (chargingPools.           Count > 0)
+                json.Add(new JProperty("chargingPools",             new JArray(chargingPools.           Select(pool             => pool.            ToJSON()))));
+
+            if (chargingStations.        Count > 0)
+                json.Add(new JProperty("chargingStations",          new JArray(chargingStations.        Select(station          => station.         ToJSON()))));
+
+            if (chargingTariffs.         Count > 0)
+                json.Add(new JProperty("chargingTariffs",           new JArray(chargingTariffs.         Select(tariff           => tariff.          ToJSON()))));
+
+            if (eMobilityProviders.      Count > 0)
+                json.Add(new JProperty("eMobilityProviders",        new JArray(eMobilityProviders.      Select(provider         => provider.        ToJSON()))));
+
+            if (mediationServices.       Count > 0)
+                json.Add(new JProperty("mediationServices",         new JArray(mediationServices.       Select(mediationService => mediationService.ToJSON()))));
 
             if (publicKeys.Count > 0)
                 json.Add(new JProperty("publicKeys",          new JArray(publicKeys.      Select(publicKey => publicKey.ToJSON()))));
