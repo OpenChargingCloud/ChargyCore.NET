@@ -475,6 +475,36 @@ verifying. Worth a bounds check in both implementations rather than a silent wra
 
 ---
 
+## 7b. Upstream changes to track
+
+ChargyCore.TS is being worked on in parallel. Changes that land there after a
+part of this port was written have to be carried over deliberately, because the
+golden reports alone will not catch a behavioural difference in a code path no
+fixture exercises.
+
+### `46eec22` — "Fix secp521r1 typo and repair the verify pipeline"
+
+Baseline of this port moved from `f6b3b3b` to `46eec22`. Four changes matter:
+
+* **`IECCurves.secp512r1` → `secp521r1`** — already the case here; `ECCurve`
+  keeps accepting the misspelling on input for records written before the fix.
+* **`chargePoint.ts` public key fallback** — a `break` was added so the first
+  matching public key wins. Without it, when no key matched the EVSE Id and all
+  available keys were tried as a fallback, a later non-matching key overwrote an
+  already successful result. **Port the fixed behaviour in Phase 4**, not the
+  loop as it was read earlier.
+* **`CryptoUtils.signJSONMessage` verifies before attaching** — a signature that
+  does not validate is no longer left behind in the caller's message.
+  **Phase 2.**
+* **`CryptoUtils.signJSONMessage` returns `signaturesCreated > 0`** — signing
+  with only unusable key pairs used to report success, so callers could mistake
+  an unsigned message for a signed one. **Phase 2.**
+
+`tests/fixtures/OCMF/versionTestData.ts` changed with it and has been re-synced;
+all 203 fixtures are byte-identical with upstream again.
+
+---
+
 ## 8. Decisions
 
 | # | Question | Decision |
