@@ -71,8 +71,8 @@ The porting strategy, the solution layout and the phase plan are documented in
 |---|---|---|
 | 0 | Repository, solution, projects, test fixtures | ✅ **done** |
 | 1 | ChargyLib, data structures, i18n, validation rules | ✅ **done** |
-| 2 | Cryptography (ECDSA, EdDSA, ML-DSA), ACrypt, signed JSON | 🚧 next |
-| 3 | Content format detection, archives, PDF/A-3, QR codes | ⬜ planned |
+| 2 | Cryptography (ECDSA, EdDSA, ML-DSA), ACrypt, signed JSON | ✅ **done** |
+| 3 | Content format detection, archives, PDF/A-3, QR codes | 🚧 next |
 | 4 | The charge transparency data formats | ⬜ planned |
 | 5 | Charge Transparency Live Link, URL resolution | ⬜ planned |
 | 6 | Documentation, samples, packaging | ⬜ planned |

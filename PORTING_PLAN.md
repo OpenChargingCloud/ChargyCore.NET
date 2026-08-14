@@ -382,13 +382,13 @@ Two additions over the original plan:
 loading, validation rules.
 *Exit:* `DataStructureTests`, `chargyInterfacesTests` green (~15 cases).
 
-### Phase 2 — Cryptography 🚧 next
+### Phase 2 — Cryptography ✅ **done**
 `ISignatureSuite` + ECDSA/EdDSA/ML-DSA suites over BouncyCastle, `Secp224k1`,
 `PublicKeyParser` (DER/PEM/HEX), `CryptoUtils` signed-JSON messages on top of
 `Illias.CanonicalJSON`, `ACrypt` base class, `VerificationTrace`.
 *Exit:* `CryptoUtilsTests`, `CanonicalJSONTests`, `PublicKeyFilesTests` green (~24 cases).
 
-### Phase 3 — I/O & container pipeline ⬜
+### Phase 3 — I/O & container pipeline 🚧 next
 `ContentFormatDetector` (the `DetectAndConvertContentFormat` state machine), archive
 readers (zip/tar/gz/bz2), `IPDFAttachmentExtractor`, `IQRCodeDecoder`, XML/JSON format
 dispatch, `SimpleURL`, `ChargeTransparencyLiveLink`.
