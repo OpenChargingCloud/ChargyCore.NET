@@ -332,14 +332,15 @@ namespace cloud.charging.open.chargy.tests
         #endregion
 
 
-        #region The_misspelled_secp512r1_of_ChargyCoreTS_is_read_as_secp521r1()
+        #region The_legacy_misspelling_secp512r1_is_read_as_secp521r1()
 
         [Test]
-        public void The_misspelled_secp512r1_of_ChargyCoreTS_is_read_as_secp521r1()
+        public void The_legacy_misspelling_secp512r1_is_read_as_secp521r1()
         {
 
-            // "secp512r1" is not a curve that exists. ChargyCore.TS carries it as a
-            // typo in its IECCurves enum, so records written by it can contain the
+            // "secp512r1" is not a curve that exists. It was a typo in the
+            // IECCurves enum of ChargyCore.TS, fixed there in the meantime, but
+            // charge transparency records written before that carry the
             // misspelling. Accepted on input, never written back out.
             Assert.Multiple(() => {
 

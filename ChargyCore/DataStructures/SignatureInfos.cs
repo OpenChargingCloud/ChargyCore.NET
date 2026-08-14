@@ -212,10 +212,10 @@ namespace cloud.charging.open.chargy
                     return true;
 
                 case "secp521r1":
-                // "secp512r1" is not a curve that exists. ChargyCore.TS carries it
-                // as a typo for secp521r1 in its IECCurves enum, so charge
-                // transparency records written by it can contain the misspelling.
-                // Accepted on input, never written back out.
+                // "secp512r1" is not a curve that exists. It was a typo in the
+                // IECCurves enum of ChargyCore.TS, fixed there in the meantime,
+                // but charge transparency records written before that carry the
+                // misspelling. Accepted on input, never written back out.
                 case "secp512r1":
                     ECCurve = ECCurve.secp521r1;
                     return true;
