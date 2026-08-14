@@ -1,0 +1,11 @@
+# Shell scripts MUST stay LF, otherwise they fail to run under WSL/bash ("\r: command not found").
+*.sh                          text eol=lf
+
+# Golden verification reports are compared line by line against the output of the
+# .NET implementation AND against the very same files in ChargyCore.TS. A CRLF
+# conversion on checkout would make every comparison fail on Windows.
+*.expected.txt                text eol=lf
+
+# Charge transparency test fixtures are byte-exact inputs for signature
+# verification: any end-of-line normalisation invalidates their signatures.
+ChargyCoreTests/TestData/**   -text

@@ -1,0 +1,64 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+
+  build:
+
+    runs-on: ubuntu-latest
+
+    steps:
+
+      - name: Checkout ChargyCore.NET
+        uses: actions/checkout@v5
+        with:
+          path: ChargyCore.NET
+
+      # ChargyCore.NET references Styx and Hermod as sibling directories,
+      # exactly like Hermod itself references Styx.
+      - name: Checkout Styx
+        uses: actions/checkout@v5
+        with:
+          repository: Vanaheimr/Styx
+          path: Styx
+
+      - name: Checkout Hermod
+        uses: actions/checkout@v5
+        with:
+          repository: Vanaheimr/Hermod
+          path: Hermod
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Restore
+        working-directory: ChargyCore.NET
+        run: dotnet restore ChargyCore.slnx
+
+      - name: Build
+        working-directory: ChargyCore.NET
+        run: dotnet build ChargyCore.slnx --configuration Release --no-restore
+
+      - name: Test
+        working-directory: ChargyCore.NET
+        run: >
+          dotnet test ChargyCore.slnx
+          --configuration Release
+          --no-build
+          --logger "trx;LogFileName=ChargyCoreTests.trx"
+          --results-directory artifacts
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: ChargyCore.NET/artifacts/**/*.trx
