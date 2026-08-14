@@ -503,6 +503,41 @@ Baseline of this port moved from `f6b3b3b` to `46eec22`. Four changes matter:
 `tests/fixtures/OCMF/versionTestData.ts` changed with it and has been re-synced;
 all 203 fixtures are byte-identical with upstream again.
 
+### `9338dae`…`8d7735e` — the timestamp, secp224k1 and CI batch
+
+Baseline moved to `8d7735e`. No fixture data changed. What matters here:
+
+* **`4d9f778` — the signed timestamp offset** ✅ **ported.** This is the bug
+  reported in §7a, and upstream fixed it more thoroughly than proposed: a
+  timestamp ending in a numeric offset (`…+01:00`) states the offset the meter
+  used and wins; a `Z` suffix or no zone says nothing about the meter, so
+  Europe/Berlin is resolved for that instant, daylight saving included. Upstream
+  confirms the impact — under UTC, five chargeIT tests reported
+  `InvalidSignature` for a valid record.
+
+  `ChargyLib.MeterLocalTime()` now mirrors this, `MeterTimeZone` is
+  Europe/Berlin, and the parameter is called `AddMeterOffset` rather than
+  `addLocalOffset`: the offset is the meter's, never the verifying machine's,
+  and conflating the two is what caused the bug.
+
+* **`6dac201` — secp224k1 hardened.** `validate()` is the only production
+  method and now fails closed: `r`/`s` must be strictly positive (the old
+  `== 0` check let negative values through), and the public key is checked to
+  be a point on the curve before it reaches the group arithmetic. Any failure
+  returns `false` instead of throwing, so a caller trying several candidate keys
+  is never interrupted. `Sign()` and `PublicKeyGenerate()` are documented as not
+  for production — not constant time, caller-supplied nonce.
+  **Phase 2:** the BouncyCastle wrapper gets the point validation for free, but
+  must keep the fail-closed contract and the strict `r`/`s` bounds.
+
+* **`7ad9897` — `sha385Value` → `sha384Value`.** A misspelled variable, not a
+  behavioural change, but the name is worth carrying over correctly.
+  **Phase 4** (chargePoint).
+
+* `9338dae` (PDF.js 6.2 API), `2ddd0d5`, `47ff213`, `a367fb7`, `503a16d`,
+  `0dab5cb`, `cbd16f6`, `8d7735e` — dependency, CI and README changes with no
+  counterpart in this port.
+
 ---
 
 ## 8. Decisions

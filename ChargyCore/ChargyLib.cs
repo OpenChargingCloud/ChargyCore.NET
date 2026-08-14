@@ -403,6 +403,63 @@ namespace cloud.charging.open.chargy
         #endregion
 
 
+        #region MeterTimeZone
+
+        /// <summary>
+        /// The time zone the EMH and GDF energy meters are assumed to run in.
+        ///
+        /// Those meters write their own <em>local</em> time into the signed buffer
+        /// as if it were a UNIX timestamp, so reconstructing that buffer needs the
+        /// offset the meter used. Taking it from the verifying machine would make
+        /// the same charge transparency record verify in one time zone and fail in
+        /// another. These meters are deployed under German calibration law, so
+        /// their local time is Europe/Berlin unless the record says otherwise.
+        /// </summary>
+        public static readonly TimeZoneInfo MeterTimeZone = TimeZoneInfo.FindSystemTimeZoneById("Europe/Berlin");
+
+        #endregion
+
+        #region MeterLocalTime          (Timestamp, TimeZone = null)
+
+        /// <summary>
+        /// Resolve a timestamp into the instant it denotes plus the UTC offset the
+        /// energy meter used when it signed it.
+        ///
+        /// A timestamp ending in a numeric offset, e.g. "2019-02-19T08:47:50+01:00",
+        /// states the meter's own offset, and chargeIT writes the meter's local and
+        /// season offset exactly that way. A "Z" suffix does not: it only says that
+        /// the record stores the instant in UTC, which reveals nothing about the
+        /// meter, so <paramref name="TimeZone"/> is consulted for that instant
+        /// instead — daylight saving time included.
+        /// </summary>
+        /// <param name="Timestamp">An ISO 8601 timestamp.</param>
+        /// <param name="TimeZone">The time zone of the energy meter; defaults to <see cref="MeterTimeZone"/>.</param>
+        /// <exception cref="FormatException">When the timestamp cannot be parsed.</exception>
+        public static (DateTimeOffset Instant, TimeSpan UTCOffset) MeterLocalTime(String         Timestamp,
+                                                                                  TimeZoneInfo?  TimeZone = null)
+        {
+
+            if (StatesItsOwnUTCOffsetRegex().IsMatch(Timestamp.Trim()))
+            {
+
+                var stated = DateTimeOffset.Parse(
+                                 Timestamp,
+                                 CultureInfo.InvariantCulture,
+                                 DateTimeStyles.None
+                             );
+
+                return (stated, stated.Offset);
+
+            }
+
+            var instant = ParseUTC(Timestamp);
+
+            return (instant, (TimeZone ?? MeterTimeZone).GetUtcOffset(instant));
+
+        }
+
+        #endregion
+
         #region SetHex              (CryptoBuffer, Hex,   Offset, Reverse = false)
 
         /// <summary>
@@ -432,7 +489,7 @@ namespace cloud.charging.open.chargy
 
         #endregion
 
-        #region SetTimestamp        (CryptoBuffer, Timestamp, Offset, AddLocalOffset = true, TimeZone = null)
+        #region SetTimestamp        (CryptoBuffer, Timestamp, Offset, AddMeterOffset = true, TimeZone = null)
 
         /// <summary>
         /// Write the lowest four bytes of a UNIX timestamp into the signature buffer
@@ -443,25 +500,60 @@ namespace cloud.charging.open.chargy
         /// eight byte scratch buffer of which only the first four are ever written.
         /// </summary>
         /// <param name="CryptoBuffer">The buffer over which the signature is computed.</param>
+        /// <param name="Timestamp">The ISO 8601 timestamp of the measurement.</param>
+        /// <param name="Offset">The position within the buffer.</param>
+        /// <param name="AddMeterOffset">
+        /// Whether to add the UTC offset the energy meter used. The EMH and GDF
+        /// meters sign their local wall clock time, so their measurements only
+        /// verify when this is enabled; Alfen passes false.
+        ///
+        /// ChargyCore.TS calls this parameter "addLocalOffset". It is deliberately
+        /// not called that here: the offset is the meter's, never the verifying
+        /// machine's, and conflating the two is what made correctly signed records
+        /// fail outside Germany.
+        /// </param>
+        /// <param name="TimeZone">The time zone of the energy meter; defaults to <see cref="MeterTimeZone"/>.</param>
+        /// <returns>The written bytes as a hexadecimal string, for the verification trace.</returns>
+        public static String SetTimestamp(Span<Byte>     CryptoBuffer,
+                                          String         Timestamp,
+                                          Int32          Offset,
+                                          Boolean        AddMeterOffset  = true,
+                                          TimeZoneInfo?  TimeZone        = null)
+        {
+
+            var (instant, utcOffset) = MeterLocalTime(Timestamp, TimeZone);
+
+            return SetTimestamp(
+                       CryptoBuffer,
+                       instant,
+                       Offset,
+                       AddMeterOffset
+                           ? utcOffset
+                           : TimeSpan.Zero
+                   );
+
+        }
+
+        #endregion
+
+        #region SetTimestamp        (CryptoBuffer, Timestamp, Offset, UTCOffset = null)
+
+        /// <summary>
+        /// Write the lowest four bytes of a UNIX timestamp into the signature buffer
+        /// in little endian byte order.
+        ///
+        /// A caller passing a <see cref="DateTimeOffset"/> has already chosen an
+        /// offset, so it is used as it is unless one is given explicitly.
+        /// </summary>
+        /// <param name="CryptoBuffer">The buffer over which the signature is computed.</param>
         /// <param name="Timestamp">The timestamp of the measurement.</param>
         /// <param name="Offset">The position within the buffer.</param>
-        /// <param name="AddLocalOffset">
-        /// Whether to add the UTC offset of <paramref name="TimeZone"/> to the UNIX
-        /// timestamp. The EMH and GDF energy meters sign their local wall clock time,
-        /// so their measurements only verify when this is enabled.
-        /// </param>
-        /// <param name="TimeZone">
-        /// The time zone the energy meter used. Defaults to the time zone of this
-        /// machine, which is what ChargyCore.TS uses — meaning verification there
-        /// silently depends on where the verifying computer stands. Pass the time
-        /// zone of the charging station to get a reproducible result.
-        /// </param>
+        /// <param name="UTCOffset">The UTC offset the energy meter used; defaults to the offset of <paramref name="Timestamp"/>.</param>
         /// <returns>The written bytes as a hexadecimal string, for the verification trace.</returns>
         public static String SetTimestamp(Span<Byte>      CryptoBuffer,
                                           DateTimeOffset  Timestamp,
                                           Int32           Offset,
-                                          Boolean         AddLocalOffset  = true,
-                                          TimeZoneInfo?   TimeZone        = null)
+                                          TimeSpan?       UTCOffset = null)
         {
 
             Span<Byte> trace = stackalloc Byte[8];
@@ -471,8 +563,7 @@ namespace cloud.charging.open.chargy
                 trace,
                 Timestamp,
                 Offset,
-                AddLocalOffset,
-                TimeZone
+                UTCOffset ?? Timestamp.Offset
             );
 
             return ToHex(trace);
@@ -481,26 +572,58 @@ namespace cloud.charging.open.chargy
 
         #endregion
 
-        #region SetTimestamp32      (CryptoBuffer, Timestamp, Offset, AddLocalOffset = true, TimeZone = null)
+        #region SetTimestamp32      (CryptoBuffer, Timestamp, Offset, AddMeterOffset = true, TimeZone = null)
 
         /// <summary>
         /// Write the lowest four bytes of a UNIX timestamp into the signature buffer
         /// in little endian byte order.
         ///
-        /// Identical to <see cref="SetTimestamp"/>, but the returned trace string
-        /// covers only the four bytes actually written.
+        /// Identical to <see cref="SetTimestamp(Span{Byte}, String, Int32, Boolean, TimeZoneInfo)"/>,
+        /// but the returned trace string covers only the four bytes actually written.
+        /// </summary>
+        /// <param name="CryptoBuffer">The buffer over which the signature is computed.</param>
+        /// <param name="Timestamp">The ISO 8601 timestamp of the measurement.</param>
+        /// <param name="Offset">The position within the buffer.</param>
+        /// <param name="AddMeterOffset">Whether to add the UTC offset the energy meter used.</param>
+        /// <param name="TimeZone">The time zone of the energy meter; defaults to <see cref="MeterTimeZone"/>.</param>
+        /// <returns>The written bytes as a hexadecimal string, for the verification trace.</returns>
+        public static String SetTimestamp32(Span<Byte>     CryptoBuffer,
+                                            String         Timestamp,
+                                            Int32          Offset,
+                                            Boolean        AddMeterOffset  = true,
+                                            TimeZoneInfo?  TimeZone        = null)
+        {
+
+            var (instant, utcOffset) = MeterLocalTime(Timestamp, TimeZone);
+
+            return SetTimestamp32(
+                       CryptoBuffer,
+                       instant,
+                       Offset,
+                       AddMeterOffset
+                           ? utcOffset
+                           : TimeSpan.Zero
+                   );
+
+        }
+
+        #endregion
+
+        #region SetTimestamp32      (CryptoBuffer, Timestamp, Offset, UTCOffset = null)
+
+        /// <summary>
+        /// Write the lowest four bytes of a UNIX timestamp into the signature buffer
+        /// in little endian byte order.
         /// </summary>
         /// <param name="CryptoBuffer">The buffer over which the signature is computed.</param>
         /// <param name="Timestamp">The timestamp of the measurement.</param>
         /// <param name="Offset">The position within the buffer.</param>
-        /// <param name="AddLocalOffset">Whether to add the UTC offset of <paramref name="TimeZone"/>.</param>
-        /// <param name="TimeZone">The time zone the energy meter used; defaults to the time zone of this machine.</param>
+        /// <param name="UTCOffset">The UTC offset the energy meter used; defaults to the offset of <paramref name="Timestamp"/>.</param>
         /// <returns>The written bytes as a hexadecimal string, for the verification trace.</returns>
         public static String SetTimestamp32(Span<Byte>      CryptoBuffer,
                                             DateTimeOffset  Timestamp,
                                             Int32           Offset,
-                                            Boolean         AddLocalOffset  = true,
-                                            TimeZoneInfo?   TimeZone        = null)
+                                            TimeSpan?       UTCOffset = null)
         {
 
             Span<Byte> trace = stackalloc Byte[4];
@@ -510,8 +633,7 @@ namespace cloud.charging.open.chargy
                 trace,
                 Timestamp,
                 Offset,
-                AddLocalOffset,
-                TimeZone
+                UTCOffset ?? Timestamp.Offset
             );
 
             return ToHex(trace);
@@ -526,22 +648,13 @@ namespace cloud.charging.open.chargy
                                                  Span<Byte>      Trace,
                                                  DateTimeOffset  Timestamp,
                                                  Int32           Offset,
-                                                 Boolean         AddLocalOffset,
-                                                 TimeZoneInfo?   TimeZone)
+                                                 TimeSpan        UTCOffset)
         {
 
-            var unixTime = Timestamp.ToUnixTimeSeconds();
+            var unixTime = Timestamp.ToUnixTimeSeconds() +
+                           (Int64) UTCOffset.TotalSeconds;
 
-            if (AddLocalOffset)
-            {
-
-                var timeZone = TimeZone ?? TimeZoneInfo.Local;
-
-                unixTime += (Int64) timeZone.GetUtcOffset(Timestamp).TotalSeconds;
-
-            }
-
-            var bytes = GetInt64Bytes(unixTime);
+            var bytes    = GetInt64Bytes(unixTime);
 
             // The four least significant bytes, least significant byte first.
             for (var i = 0; i < 4; i++)
@@ -785,6 +898,14 @@ namespace cloud.charging.open.chargy
 
         [GeneratedRegex(@"\s+")]
         private static partial Regex WhitespaceRegex();
+
+        /// <summary>
+        /// A timestamp ending in a numeric UTC offset, e.g. "2019-02-19T08:47:50+01:00".
+        /// A "Z" suffix deliberately does not match: it says the record stores the
+        /// instant in UTC, which reveals nothing about the energy meter.
+        /// </summary>
+        [GeneratedRegex(@"[+-]\d{2}:?\d{2}$")]
+        private static partial Regex StatesItsOwnUTCOffsetRegex();
 
         #endregion
 

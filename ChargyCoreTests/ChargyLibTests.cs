@@ -214,8 +214,8 @@ namespace cloud.charging.open.chargy.tests
             var timestamp1 = DateTimeOffset.FromUnixTimeSeconds(1554181214);
             var timestamp2 = DateTimeOffset.FromUnixTimeSeconds(1561539464);
 
-            var trace1  = ChargyLib.SetTimestamp(buffer, timestamp1, 0, AddLocalOffset: false);
-            var trace2  = ChargyLib.SetTimestamp(buffer, timestamp2, 4, AddLocalOffset: false);
+            var trace1  = ChargyLib.SetTimestamp(buffer, timestamp1, 0, TimeSpan.Zero);
+            var trace2  = ChargyLib.SetTimestamp(buffer, timestamp2, 4, TimeSpan.Zero);
             var written = ChargyLib.ToHex(buffer);
 
             Assert.Multiple(() => {
@@ -245,7 +245,7 @@ namespace cloud.charging.open.chargy.tests
                             buffer,
                             DateTimeOffset.FromUnixTimeSeconds(1554181214),
                             0,
-                            AddLocalOffset: false
+                            TimeSpan.Zero
                         );
 
             Assert.That(trace,  Is.EqualTo("5eeca25c"));
@@ -254,23 +254,17 @@ namespace cloud.charging.open.chargy.tests
 
         #endregion
 
-        #region SetTimestamp_adds_the_UTC_offset_of_the_given_time_zone()
+        #region SetTimestamp_adds_the_offset_the_energy_meter_used()
 
         [Test]
-        public void SetTimestamp_adds_the_UTC_offset_of_the_given_time_zone()
+        public void SetTimestamp_adds_the_offset_the_energy_meter_used()
         {
 
             Span<Byte> buffer = stackalloc Byte[8];
 
-            // The EMH and GDF energy meters sign their local wall clock time.
-            // ChargyCore.TS takes that offset from the machine it happens to run on,
-            // which makes its verification result depend on where the verifying
-            // computer stands. Here the time zone is explicit and reproducible.
-            var timestamp   = DateTimeOffset.FromUnixTimeSeconds(1554181214);   // 2019-04-02, CEST: +2h
-            var berlin      = TimeZoneInfo.FindSystemTimeZoneById("Europe/Berlin");
-
-            var withOffset  = ChargyLib.SetTimestamp32(buffer, timestamp, 0, AddLocalOffset: true,  TimeZone: berlin);
-            var withoutIt   = ChargyLib.SetTimestamp32(buffer, timestamp, 0, AddLocalOffset: false);
+            // 2019-04-02, so Europe/Berlin is on summer time: +2h.
+            var withOffset = ChargyLib.SetTimestamp32(buffer, "2019-04-02T05:00:14Z", 0);
+            var withoutIt  = ChargyLib.SetTimestamp32(buffer, "2019-04-02T05:00:14Z", 0, AddMeterOffset: false);
 
             Assert.Multiple(() => {
 
@@ -279,6 +273,92 @@ namespace cloud.charging.open.chargy.tests
 
                 // 1554181214 + 7200 = 1554188414 = 0x5CA3087E, little endian.
                 Assert.That(withOffset,  Is.EqualTo("7e08a35c"));
+
+            });
+
+        }
+
+        #endregion
+
+        #region SetTimestamp_does_not_depend_on_the_verifying_machine()
+
+        [Test]
+        public void SetTimestamp_does_not_depend_on_the_verifying_machine()
+        {
+
+            // This is the bug that made a correctly signed EMH record verify in
+            // Germany and fail everywhere else: the offset was taken from the host
+            // rather than from the record. Asserting the concrete Europe/Berlin
+            // bytes catches a relapse on any machine, not only on a CI runner.
+            Span<Byte> buffer = stackalloc Byte[8];
+
+            var summer = ChargyLib.SetTimestamp32(buffer, "2019-04-02T05:00:14Z", 0);   // CEST, +2h
+            var winter = ChargyLib.SetTimestamp32(buffer, "2019-02-19T07:47:50Z", 0);   // CET,  +1h
+
+            Assert.Multiple(() => {
+
+                Assert.That(ChargyLib.MeterTimeZone.Id,  Is.EqualTo("Europe/Berlin"));
+
+                // 1554181214 + 7200 = 1554188414 = 0x5CA3087E
+                Assert.That(summer,  Is.EqualTo("7e08a35c"));
+
+                // 1550562470 + 3600 = 1550566070 = 0x5C6BC2B6
+                Assert.That(winter,  Is.EqualTo("b6c26b5c"));
+
+            });
+
+        }
+
+        #endregion
+
+        #region A_timestamp_with_an_explicit_offset_states_the_meters_own_offset()
+
+        [Test]
+        public void A_timestamp_with_an_explicit_offset_states_the_meters_own_offset()
+        {
+
+            // chargeIT writes the meter's own local and season offset into the
+            // timestamp, so that offset wins over the Europe/Berlin assumption.
+            var stated   = ChargyLib.MeterLocalTime("2019-02-19T08:47:50+01:00");
+            var assumed  = ChargyLib.MeterLocalTime("2019-02-19T07:47:50Z");
+            var elsewhen = ChargyLib.MeterLocalTime("2019-02-19T12:47:50+05:00");
+
+            Assert.Multiple(() => {
+
+                // Same instant either way ...
+                Assert.That(stated.  Instant.ToUnixTimeSeconds(),  Is.EqualTo(1550562470));
+                Assert.That(assumed. Instant.ToUnixTimeSeconds(),  Is.EqualTo(1550562470));
+
+                // ... but the offset comes from the record when it states one.
+                Assert.That(stated.  UTCOffset,  Is.EqualTo(TimeSpan.FromHours(1)));
+                Assert.That(assumed. UTCOffset,  Is.EqualTo(TimeSpan.FromHours(1)));   // Europe/Berlin in February
+                Assert.That(elsewhen.UTCOffset,  Is.EqualTo(TimeSpan.FromHours(5)));
+
+            });
+
+        }
+
+        #endregion
+
+        #region A_Z_suffix_says_nothing_about_the_meter()
+
+        [Test]
+        public void A_Z_suffix_says_nothing_about_the_meter()
+        {
+
+            // "Z" only says the record stores the instant in UTC. Reading it as
+            // "the meter ran on UTC" is what produced a zero offset and a wrong
+            // signature buffer.
+            Assert.Multiple(() => {
+
+                Assert.That(ChargyLib.MeterLocalTime("2019-04-02T05:00:14Z").UTCOffset,
+                            Is.EqualTo(TimeSpan.FromHours(2)));
+
+                Assert.That(ChargyLib.MeterLocalTime("2019-04-02T05:00:14").UTCOffset,
+                            Is.EqualTo(TimeSpan.FromHours(2)));
+
+                Assert.That(ChargyLib.MeterLocalTime("2019-04-02T05:00:14+00:00").UTCOffset,
+                            Is.EqualTo(TimeSpan.Zero));
 
             });
 
