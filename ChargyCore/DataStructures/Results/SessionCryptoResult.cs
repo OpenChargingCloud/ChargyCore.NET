@@ -89,6 +89,23 @@ namespace cloud.charging.open.chargy
         #endregion
 
 
+        #region IsUsable
+
+        /// <summary>
+        /// Whether this result is worth considering at all.
+        ///
+        /// Several parsers are offered the same file, and each answers with a
+        /// result. A result of <see cref="SessionVerificationResult.InvalidSessionFormat"/>
+        /// means "this is not my format" rather than "this record is broken", so
+        /// the dispatcher must not let it win over a parser that did understand
+        /// the file. This is "isISessionCryptoResult2()" of ChargyCore.TS.
+        /// </summary>
+        public Boolean IsUsable
+
+            => Status != SessionVerificationResult.InvalidSessionFormat;
+
+        #endregion
+
         #region AddError    (Error)
 
         /// <summary>

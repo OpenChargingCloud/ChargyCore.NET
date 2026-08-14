@@ -340,6 +340,68 @@ namespace cloud.charging.open.chargy.tests
 
         #endregion
 
+        #region The_German_offset_is_resolved_including_daylight_saving_time()
+
+        [Test]
+        public void The_German_offset_is_resolved_including_daylight_saving_time()
+        {
+
+            // 2019-03-31T01:00:00Z is the exact moment Europe/Berlin switches from
+            // CET to CEST. A fixed +1h assumption would silently misdate every
+            // summer measurement by an hour.
+            Assert.Multiple(() => {
+
+                Assert.That(ChargyLib.MeterLocalTime("2019-02-19T07:47:50Z").UTCOffset,  Is.EqualTo(TimeSpan.FromMinutes( 60)));
+                Assert.That(ChargyLib.MeterLocalTime("2019-06-26T15:33:20Z").UTCOffset,  Is.EqualTo(TimeSpan.FromMinutes(120)));
+
+                Assert.That(ChargyLib.MeterLocalTime("2019-03-31T00:59:00Z").UTCOffset,  Is.EqualTo(TimeSpan.FromMinutes( 60)));
+                Assert.That(ChargyLib.MeterLocalTime("2019-03-31T01:01:00Z").UTCOffset,  Is.EqualTo(TimeSpan.FromMinutes(120)));
+
+            });
+
+        }
+
+        #endregion
+
+        #region Another_meter_time_zone_can_be_requested()
+
+        [Test]
+        public void Another_meter_time_zone_can_be_requested()
+        {
+
+            var utc     = TimeZoneInfo.FindSystemTimeZoneById("UTC");
+            var kolkata = TimeZoneInfo.FindSystemTimeZoneById("Asia/Kolkata");
+
+            Assert.Multiple(() => {
+                Assert.That(ChargyLib.MeterLocalTime("2019-02-19T07:47:50Z", utc).    UTCOffset,  Is.EqualTo(TimeSpan.Zero));
+                Assert.That(ChargyLib.MeterLocalTime("2019-02-19T07:47:50Z", kolkata).UTCOffset,  Is.EqualTo(TimeSpan.FromMinutes(330)));
+            });
+
+        }
+
+        #endregion
+
+        #region The_64_bit_variant_used_by_GDF_follows_the_same_rules()
+
+        [Test]
+        public void The_64_bit_variant_used_by_GDF_follows_the_same_rules()
+        {
+
+            Span<Byte> buffer = stackalloc Byte[8];
+
+            var withOffset = ChargyLib.SetTimestamp(buffer, "2019-04-02T05:00:14Z", 0);
+            var withoutIt  = ChargyLib.SetTimestamp(buffer, "2019-04-02T05:00:14Z", 0, AddMeterOffset: false);
+
+            Assert.Multiple(() => {
+                // Four written bytes, an eight byte trace — as with SetTimestamp32.
+                Assert.That(withOffset,  Is.EqualTo("7e08a35c00000000"));
+                Assert.That(withoutIt,   Is.EqualTo("5eeca25c00000000"));
+            });
+
+        }
+
+        #endregion
+
         #region A_Z_suffix_says_nothing_about_the_meter()
 
         [Test]

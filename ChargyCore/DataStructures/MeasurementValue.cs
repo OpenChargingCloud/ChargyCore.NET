@@ -28,21 +28,25 @@ namespace cloud.charging.open.chargy
 
     /// <summary>
     /// The scaling of a measured value as it is presented to the user.
+    ///
+    /// Note: This is one of the few enums of ChargyCore.TS that is numeric rather
+    /// than string valued, so charge transparency records carry it as a number.
+    /// It is read and written as one here too.
     /// </summary>
     public enum DisplayPrefix
     {
 
         /// <summary>No prefix.</summary>
-        NULL,
+        NULL = 0,
 
         /// <summary>Kilo.</summary>
-        KILO,
+        KILO = 1,
 
         /// <summary>Mega.</summary>
-        MEGA,
+        MEGA = 2,
 
         /// <summary>Giga.</summary>
-        GIGA
+        GIGA = 3
 
     }
 
@@ -220,8 +224,10 @@ namespace cloud.charging.open.chargy
                                    timestamp,
                                    value,
                                    signatures,
-                                   Enum.TryParse<DisplayPrefix>(JSON["value_displayPrefix"]?.Value<String>(), out var prefix)
-                                       ? prefix
+                                   // Numeric on the wire, see DisplayPrefix.
+                                   JSON["value_displayPrefix"]?.Type == JTokenType.Integer &&
+                                   Enum.IsDefined((DisplayPrefix) JSON["value_displayPrefix"]!.Value<Int32>())
+                                       ? (DisplayPrefix) JSON["value_displayPrefix"]!.Value<Int32>()
                                        : null,
                                    JSON["value_displayPrecision"]?.Value<UInt16>(),
                                    JSON["statusMeter"]?.  Value<String>(),
@@ -285,7 +291,7 @@ namespace cloud.charging.open.chargy
                        );
 
             if (ValueDisplayPrefix.HasValue)
-                json.Add(new JProperty("value_displayPrefix",       ValueDisplayPrefix.Value.ToString()));
+                json.Add(new JProperty("value_displayPrefix",       (Int32) ValueDisplayPrefix.Value));
 
             if (ValueDisplayPrecision.HasValue)
                 json.Add(new JProperty("value_displayPrecision",    ValueDisplayPrecision.Value));

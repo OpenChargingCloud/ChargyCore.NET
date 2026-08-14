@@ -25,6 +25,21 @@ namespace cloud.charging.open.chargy
 {
 
     /// <summary>
+    /// How a public key is represented.
+    /// </summary>
+    public enum PublicKeyFormat
+    {
+
+        /// <summary>An ASN.1 DER encoded SubjectPublicKeyInfo.</summary>
+        DER,
+
+        /// <summary>A pair of curve coordinates.</summary>
+        XY
+
+    }
+
+
+    /// <summary>
     /// The public key of an energy meter, a charging station, a charging station
     /// operator or any other party in the charge transparency public key
     /// infrastructure.

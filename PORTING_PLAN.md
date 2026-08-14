@@ -376,13 +376,13 @@ Two additions over the original plan:
 > as the reference for the C# table-driven fixtures written in Phase 1 and Phase 4,
 > and are part of the 203 files asserted above.
 
-### Phase 1 — Foundation 🚧 in progress
+### Phase 1 — Foundation ✅ **done**
 `ChargyLib` (hex, byte, OBIS, timestamp helpers — Span-based), the complete
 `DataStructures/` model with `ToJSON()`/`TryParse()`, results & enums, i18n dictionary
 loading, validation rules.
 *Exit:* `DataStructureTests`, `chargyInterfacesTests` green (~15 cases).
 
-### Phase 2 — Cryptography ⬜
+### Phase 2 — Cryptography 🚧 next
 `ISignatureSuite` + ECDSA/EdDSA/ML-DSA suites over BouncyCastle, `Secp224k1`,
 `PublicKeyParser` (DER/PEM/HEX), `CryptoUtils` signed-JSON messages on top of
 `Illias.CanonicalJSON`, `ACrypt` base class, `VerificationTrace`.

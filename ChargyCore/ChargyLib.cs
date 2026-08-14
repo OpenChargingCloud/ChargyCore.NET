@@ -183,6 +183,58 @@ namespace cloud.charging.open.chargy
 
         #endregion
 
+        #region CreateHexString (Bytes)
+
+        /// <summary>
+        /// The hexadecimal representation of the given values.
+        ///
+        /// Note: Values above 255 are truncated to their lowest byte rather than
+        /// rejected, mirroring "createHexString()" of ChargyCore.TS, which keeps
+        /// only the last two hexadecimal digits.
+        /// </summary>
+        public static String CreateHexString(IEnumerable<Int32> Values)
+        {
+
+            var result = new System.Text.StringBuilder();
+
+            foreach (var value in Values)
+                result.Append((value & 0xFF).ToString("x2", CultureInfo.InvariantCulture));
+
+            return result.ToString();
+
+        }
+
+        #endregion
+
+        #region IntFromBytes    (Bytes)
+
+        /// <summary>
+        /// The given bytes read as one integer, most significant byte first.
+        ///
+        /// Note: This shifts through 32 bits like its JavaScript original, so more
+        /// than four bytes overflow instead of widening.
+        /// </summary>
+        public static Int32 IntFromBytes(ReadOnlySpan<Byte> Bytes)
+        {
+
+            var value = 0;
+
+            for (var i = 0; i < Bytes.Length; i++)
+            {
+
+                value += Bytes[i];
+
+                if (i < Bytes.Length - 1)
+                    value <<= 8;
+
+            }
+
+            return value;
+
+        }
+
+        #endregion
+
         #region CleanHex        (Hex)
 
         /// <summary>
