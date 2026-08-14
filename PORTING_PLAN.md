@@ -540,6 +540,27 @@ Baseline moved to `8d7735e`. No fixture data changed. What matters here:
 
 ---
 
+## 7c. Known limitations of this port
+
+### ML-DSA context strings are not supported
+
+FIPS 204 defines an optional context string for ML-DSA, and ChargyCore.TS passes
+it through to Noble. **BouncyCastle 2.7.0 does not expose it** — there is no
+`ParametersWithContext` and `MLDsaSigner.Init()` takes the key parameters alone.
+
+`MLDSASignatureSuite` therefore **throws `NotSupportedException`** when a non-empty
+context is supplied, in both `Sign()` and `Verify()`. Dropping it quietly would
+produce signatures that do not match the record, and on the verifying side it
+would report a valid measurement as invalid without saying why — the one failure
+mode a transparency software must not have.
+
+An empty or absent context, which is what the OCMF records in the fixtures use,
+works normally. If a context is ever needed, the options are a newer BouncyCastle
+once it exposes one, or a hand-rolled FIPS 204 domain separator in front of the
+message — the latter only with test vectors to prove it matches.
+
+---
+
 ## 8. Decisions
 
 | # | Question | Decision |

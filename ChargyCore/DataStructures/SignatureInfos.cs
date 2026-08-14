@@ -42,7 +42,7 @@ namespace cloud.charging.open.chargy
                                 ECCurve              Curve,
                                 SignatureFormat      Format,
                                 UInt16?              HashTruncation  = null,
-                                SignatureEncoding?   Encoding        = null)
+                                DataEncoding?        Encoding        = null)
     {
 
         #region Properties
@@ -63,7 +63,7 @@ namespace cloud.charging.open.chargy
         public UInt16?              HashTruncation    { get; } = HashTruncation;
 
         /// <summary>An optional encoding of the signature.</summary>
-        public SignatureEncoding?   Encoding          { get; } = Encoding;
+        public DataEncoding?        Encoding          { get; } = Encoding;
 
         #endregion
 
@@ -94,7 +94,7 @@ namespace cloud.charging.open.chargy
                                  curve,
                                  format,
                                  JSON["hashTruncation"]?.Value<UInt16>(),
-                                 SignatureEncodingExtensions.TryParse(JSON["encoding"]?.Value<String>() ?? "")
+                                 DataEncodingExtensions.TryParse(JSON["encoding"]?.Value<String>() ?? "")
                              );
 
             return true;
@@ -262,7 +262,7 @@ namespace cloud.charging.open.chargy
     /// <summary>
     /// How a signature or a public key is encoded.
     /// </summary>
-    public enum SignatureEncoding
+    public enum DataEncoding
     {
 
         /// <summary>Hexadecimal.</summary>
@@ -277,32 +277,32 @@ namespace cloud.charging.open.chargy
     /// <summary>
     /// Extension methods for signature encodings.
     /// </summary>
-    public static class SignatureEncodingExtensions
+    public static class DataEncodingExtensions
     {
 
-        #region TryParse(Text, out SignatureEncoding)
+        #region TryParse(Text, out DataEncoding)
 
         /// <summary>
         /// Try to parse the given text as a signature encoding.
         /// </summary>
         /// <param name="Text">A text representation of a signature encoding.</param>
-        /// <param name="SignatureEncoding">The parsed signature encoding.</param>
-        public static Boolean TryParse(String Text, out SignatureEncoding SignatureEncoding)
+        /// <param name="DataEncoding">The parsed signature encoding.</param>
+        public static Boolean TryParse(String Text, out DataEncoding DataEncoding)
         {
 
             switch (Text.Trim().ToLowerInvariant())
             {
 
                 case "hex":
-                    SignatureEncoding = SignatureEncoding.Hex;
+                    DataEncoding = DataEncoding.Hex;
                     return true;
 
                 case "base64":
-                    SignatureEncoding = SignatureEncoding.Base64;
+                    DataEncoding = DataEncoding.Base64;
                     return true;
 
                 default:
-                    SignatureEncoding = SignatureEncoding.Hex;
+                    DataEncoding = DataEncoding.Hex;
                     return false;
 
             }
@@ -317,7 +317,7 @@ namespace cloud.charging.open.chargy
         /// Try to parse the given text as a signature encoding.
         /// </summary>
         /// <param name="Text">A text representation of a signature encoding.</param>
-        public static SignatureEncoding? TryParse(String Text)
+        public static DataEncoding? TryParse(String Text)
 
             => TryParse(Text, out var encoding)
                    ? encoding
@@ -325,16 +325,16 @@ namespace cloud.charging.open.chargy
 
         #endregion
 
-        #region AsText  (this SignatureEncoding)
+        #region AsText  (this DataEncoding)
 
         /// <summary>
         /// The wire representation of the given signature encoding.
         /// </summary>
-        /// <param name="SignatureEncoding">A signature encoding.</param>
-        public static String AsText(this SignatureEncoding SignatureEncoding)
+        /// <param name="DataEncoding">A signature encoding.</param>
+        public static String AsText(this DataEncoding DataEncoding)
 
-            => SignatureEncoding switch {
-                   SignatureEncoding.Base64  => "base64",
+            => DataEncoding switch {
+                   DataEncoding.Base64  => "base64",
                    _                         => "hex"
                };
 

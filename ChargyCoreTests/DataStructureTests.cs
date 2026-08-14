@@ -378,7 +378,7 @@ namespace cloud.charging.open.chargy.tests
                 Assert.That(infos. Algorithm,  Is.EqualTo(CryptoAlgorithm.ECC));
                 Assert.That(infos. Curve,      Is.EqualTo(ECCurve.secp256r1));
                 Assert.That(infos. Format,     Is.EqualTo(SignatureFormat.DER));
-                Assert.That(infos. Encoding,   Is.EqualTo(SignatureEncoding.Hex));
+                Assert.That(infos. Encoding,   Is.EqualTo(DataEncoding.Hex));
 
                 Assert.That(SignatureInfos.TryParse(infos.ToJSON(), out var roundTrip),  Is.True);
                 Assert.That(roundTrip!.ToString(),  Is.EqualTo(infos.ToString()));
