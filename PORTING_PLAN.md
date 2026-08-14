@@ -432,6 +432,49 @@ with the shared package metadata, optional NuGet packaging.
 
 ---
 
+## 7a. Findings from the port
+
+Things discovered while porting that are worth knowing in ChargyCore.TS as well.
+
+### The EMH and GDF signature buffers depend on the verifying machine's time zone
+
+`chargyLib.SetTimestamp()` / `SetTimestamp32()` compute
+
+```ts
+timestamp.unix() + (addLocalOffset ? 60 * timestamp.utcOffset() : 0)
+```
+
+where `utcOffset()` is the offset of the **local time zone of whoever runs the
+verification**, because `parseUTC()` returns `moment.utc(...).local()`.
+
+`EMHCrypt01` and `GDFCrypt01` use the default `addLocalOffset = true`; `Alfen`
+explicitly passes `false`. So an EMH or GDF measurement that verifies in Germany
+fails in Portugal, and vice versa — the fixtures happen to pass because they were
+produced by German meters and are tested on German machines. A CI runner on UTC
+would fail them.
+
+ChargyCore.NET reproduces the arithmetic exactly, but takes the time zone as an
+explicit parameter (`TimeZoneInfo`, defaulting to `TimeZoneInfo.Local` so the
+default behaviour is unchanged). The tests pin `Europe/Berlin`, which makes them
+reproducible everywhere, including the UTC CI runners.
+
+The proper fix in both implementations is to carry the charging station's time
+zone in the charge transparency record instead of guessing it from the verifier.
+That is a data model change and out of scope for the port.
+
+### `getInt64Bytes()` is a 32 bit conversion
+
+JavaScript bitwise operators coerce to signed 32 bit, so `getInt64Bytes()` emits
+eight bytes but sign-extends everything at or above 2^31 and wraps to zero at
+2^32. Verified against Node: `2147483648` → `ffffffff80000000`, `4294967296` →
+`0000000000000000`.
+
+Harmless for real meter readings, which stay well below 2^31, and faithfully
+reproduced by `ChargyLib.GetInt64Bytes` so that genuine measurements keep
+verifying. Worth a bounds check in both implementations rather than a silent wrap.
+
+---
+
 ## 8. Decisions
 
 | # | Question | Decision |
