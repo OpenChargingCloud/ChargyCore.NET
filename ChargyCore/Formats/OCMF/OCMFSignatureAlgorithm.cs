@@ -80,13 +80,20 @@ namespace cloud.charging.open.chargy.Formats.OCMF
         /// it, which is reported as an unsupported curve rather than as a bad
         /// signature — the difference between "this library cannot check this"
         /// and "this charging session is not what it claims".
+        ///
+        /// The two secp192 curves are a deliberate difference from ChargyCore.TS,
+        /// which leaves them unverifiable because its JavaScript curve library
+        /// does not carry them. BouncyCastle does, so this port verifies them
+        /// rather than declining to look. A charging session signed on secp192r1
+        /// is checkable here and is reported as unverifiable there; nothing that
+        /// verifies in one implementation fails in the other.
         /// </summary>
         private static readonly OCMFSignatureAlgorithm[] known = [
 
             // The OCMF standard algorithms.
             new ("ECDSA-secp256r1-SHA256",       "secp256r1",  "SHA256",  "SHA256"),
-            new ("ECDSA-secp192k1-SHA256",       null,         "SHA256",  "SHA256"),
-            new ("ECDSA-secp192r1-SHA256",       null,         "SHA256",  "SHA256, 256 Bits, hex"),
+            new ("ECDSA-secp192k1-SHA256",       "secp192k1",  "SHA256",  "SHA256"),
+            new ("ECDSA-secp192r1-SHA256",       "secp192r1",  "SHA256",  "SHA256, 256 Bits, hex"),
             new ("ECDSA-secp256k1-SHA256",       "secp256k1",  "SHA256",  "SHA256, 256 Bits, hex"),
             new ("ECDSA-brainpool256r1-SHA256",  null,         "SHA256",  "SHA256, 256 Bits, hex"),
 

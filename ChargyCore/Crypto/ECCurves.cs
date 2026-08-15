@@ -175,6 +175,9 @@ namespace cloud.charging.open.chargy.Crypto
         /// <summary>NIST/ANSI X9.62 secp192r1, used by the EMH and GDF energy meters.</summary>
         public static readonly ECCurveVerifier secp192r1  = new ("secp192r1", "SHA-256");
 
+        /// <summary>Koblitz curve secp192k1, named by OCMF.</summary>
+        public static readonly ECCurveVerifier secp192k1  = new ("secp192k1", "SHA-256");
+
         /// <summary>Koblitz curve secp224k1, used by the legacy ChargePoint and Alfen data.</summary>
         public static readonly ECCurveVerifier secp224k1  = new ("secp224k1", "SHA-256");
 
@@ -240,6 +243,7 @@ namespace cloud.charging.open.chargy.Crypto
         public static ECCurveVerifier? TryGet(String? CurveName)
 
             => CurveName?.Trim().ToLowerInvariant() switch {
+                   "secp192k1"                       => secp192k1,
                    "secp192r1" or "p192" or "p-192"  => secp192r1,
                    "secp224k1"                       => secp224k1,
                    "secp256k1"                       => secp256k1,

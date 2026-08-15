@@ -587,8 +587,30 @@ message — the latter only with test vectors to prove it matches.
 | 6 | QR code decoding lives where? | **Revised in Phase 3.** Decision 4 put the default implementations in the core library. The PDF reader is there, and needs no dependency at all. The QR decoder is not: it pulls SkiaSharp with its native binaries, plus Svg.Skia and ZXing.Net. It therefore moved into **`ChargyCore.QRCodes`**, behind `IQRCodeDecoder`. This is closer to ChargyCore.TS than the original decision was — there the `canvas` / `pngjs` / `jpeg-js` modules are *optional* dependencies loaded at runtime, and QR reading degrades gracefully when they are absent. Without a decoder Chargy passes QR images through untouched, exactly as the TypeScript does |
 | 7 | PDF/A-3 reading: hand-rolled or `PdfPig`? | **Hand-rolled**, as decision 4 preferred. Rather than parse cross-reference tables, `PDFDocument` scans the file for `N G obj` definitions directly. That treats classic tables, cross-reference streams, incremental updates and *damaged* tables all the same way — and a charge transparency record is far too important to lose to a table some invoice generator got wrong. Object streams, `FlateDecode`, `ASCIIHexDecode`, `ASCII85Decode` and the PNG predictors are supported; encrypted PDFs yield nothing |
 | 8 | Where does the PDF reader live? | **Styx**, as `org.GraphDefined.Vanaheimr.Illias.PDFDocument` / `PDFParser` / `PDFObject` / `PDFEmbeddedFile`, next to the existing CBOR, COSE, CSV and JSON readers. Reading embedded files out of a PDF/A-3 is not a Chargy concern — ZUGFeRD and Factur-X invoices work the same way. The code was written from scratch against the PDF specification rather than derived from ChargyCore.TS, which uses `pdfjs-dist`, so it carries Styx's Apache-2.0 header. What stays in ChargyCore is `PDFAttachmentExtractor`: the closed list of attachment types worth looking at, behind `IPDFAttachmentExtractor` |
+| 9 | The OCMF secp192 curves | **Deviation from ChargyCore.TS, on purpose.** ChargyCore.TS recognises `ECDSA-secp192k1-SHA256` and `ECDSA-secp192r1-SHA256` but maps neither to a curve, so both end as `InvalidPublicKey`: its JavaScript curve library does not carry them. BouncyCastle does, so this port verifies them. The difference is one-directional and safe — every record that verifies in ChargyCore.TS verifies here, and the only records judged differently are the ones the TypeScript implementation declines to judge at all. No golden file is affected, because no fixture uses these curves. The brainpool curves stay unverified in both, which is now a scope decision rather than a limitation: BouncyCastle carries those too |
+
+### Deviations from ChargyCore.TS
+
+Behaviour where this port deliberately differs. Kept together so the list stays
+short and reviewable, because every entry weakens the golden-file parity contract.
+
+| Where | Difference | Why |
+|---|---|---|
+| OCMF `secp192k1` / `secp192r1` | Verified here, `InvalidPublicKey` in ChargyCore.TS | BouncyCastle carries the curves; the JavaScript library does not. Decision 9 |
+
+Everything else that looked like a bug was reported upstream and fixed there rather
+than worked around here — the `secp512r1` typo, the host-timezone dependency in the
+signed timestamps, and the hardcoded OCMF session id. That is the preferred route:
+a deviation has to be maintained forever, an upstream fix does not.
 
 ### Still to settle (not blocking)
+
+* **`PublicKeyParser.TryParseDER` handles named curves only.** A SubjectPublicKeyInfo
+  that spells its curve out as explicit domain parameters instead of naming it by
+  object identifier yields null, and therefore `InvalidPublicKey`. Every fixture and
+  every meter seen so far names the curve, and an unreadable key shape is reported
+  honestly rather than guessed at, so this is not urgent — but it is a real gap and
+  was found by accident while testing the secp192 curves.
 
 * **Existing prior art** — `VanaheimrElectric/libs/WWCP_OCPP/WWCP_OCPP_Common/Chargy/`
   holds a small (~700 LOC) partial Chargy port (`ChargyLib`, `ACrypt`, `EMHCrypt01`,
