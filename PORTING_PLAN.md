@@ -104,6 +104,8 @@ ChargyCore.NET/
 │   │   │                 MennekesChargingProcess.cs, MennekesMeasurement.cs
 │   │   ├── ChargePoint/  ChargePointFormat.cs, ChargePointCrypt01.cs
 │   │   ├── PCDF/         PCDFFormat.cs, PCDFCrypt01.cs, PCDFDocument.cs
+│   │   ├── PTB/          PTBContainer.cs
+│   │   ├── XMLContainer/ XMLContainerFormat.cs
 │   │   └── QIDigital/    DCC.cs, DCoA.cs, DCoC.cs
 │   │
 │   ├── Containers/                     data *representations* (not formats)
@@ -506,7 +508,33 @@ infrastructure. Every step is a self-contained increment: format + its `ACrypt` 
    key handed over alongside is a second opinion rather than a missing piece: when
    the two disagree the reading stops, because there is no honest way to choose
    between them.
-8. **PTB container + XMLContainer + KEBA** → (3)
+8. **PTB container + XMLContainer + KEBA** ✅ **done** → `ContainerTests` (10).
+   KEBA is a SAFE XML container carrying **100 OCMF documents** that group into one
+   charging session of 190 readings — by far the largest fixture, and it passed
+   unchanged except for the session id (see below).
+   PTB is a small envelope around two OCMF documents plus the one thing OCMF cannot
+   say: where the charging station stands. Its schema is checked strictly and every
+   violation reported at once, because the place is exactly what somebody would have
+   to falsify to bill a driver for a session at a station they never visited.
+   The `XMLContainer` is ported faithfully and **stops where ChargyCore.TS stops**:
+   it reads the container, checks it for internal consistency — one key, one
+   signature method, one encoding throughout — and then reports that it cannot turn
+   the values into a charging session. Upstream leaves that conversion as a ToDo, and
+   inventing one here would mean claiming to verify something the reference
+   implementation does not. A test pins that, so the day upstream finishes it, it says so.
+
+   Two findings. The two `PTBContainer/*.expected.txt` files are **orphans in both
+   repositories**: their report format (`format: ptb`, `energyDifferenceWh`) is
+   produced by no code in ChargyCore.TS, and the three tests that would use their
+   fixtures are `test.skip` — the fixtures are hand-made demo data that OCMF itself
+   rejects. So the golden-file count is 23 reachable, not 25. A test pins that the
+   PTB *envelope* accepts them and OCMF is what turns them down, since the fixtures
+   are checked in, look usable, and are not.
+   And OCMF was **discarding everything the container knew** — the address, the
+   geographical location, the description, the firmware — rebuilding the charging
+   station from identifications alone. No golden file prints an address, so nothing
+   caught it. That is the whole reason a container exists, and an EV driver shown
+   only a meter serial number had been told less than the file contained.
 9. **QIDigital DCC/DCoA/DCoC + OCPI** → `OCPITests`
 
 ### Phase 5 — Live link & online features ⬜
@@ -579,6 +607,17 @@ meter reading never becomes a binary float, and a check that nothing follows the
 JSON object.
 
 This has no counterpart upstream: `JSON.parse` leaves strings alone.
+
+Numbers, however, must stay **doubles** — Newtonsoft's default. Reading them as
+decimals looks like the safer choice and is not: a decimal remembers that a meter
+wrote `0.00` rather than `0`, canonical JSON renders numbers the ECMAScript way,
+and the OCMF session identity is a hash over that canonical form. Preserving the
+trailing zeros gives the same charging session a different identity from the one
+every other implementation computes, which is exactly what the KEBA golden file
+caught. The precision a double costs is irrelevant here — meter readings stay far
+inside the fifteen significant digits a double round-trips exactly — while the
+identity is not negotiable. `FloatParseHandling.Decimal` was added speculatively
+alongside the date fix and has been removed again.
 
 ### `getInt64Bytes()` is a 32 bit conversion
 

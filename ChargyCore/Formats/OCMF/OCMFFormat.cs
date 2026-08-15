@@ -319,9 +319,10 @@ namespace cloud.charging.open.chargy.Formats.OCMF
                     }
 
                     group.Values.Add(
-                        new MeasurementValue(
+                        new OCMFMeasurementValue(
                             ocmfReading.Timestamp,
-                            ocmfReading.Value
+                            ocmfReading.Value,
+                            document
                         ) {
                             // The reading is not signed on its own: the signature
                             // covers the whole OCMF document it arrived in, so its
@@ -419,17 +420,36 @@ namespace cloud.charging.open.chargy.Formats.OCMF
             // The meter hangs off the EVSE when the record names one, and off the
             // charging station otherwise — so that a verification can find it
             // either way rather than depending on how complete the record is.
-            var evseId          = signedEVSEId ?? ContainerInfos?.FirstEVSEId;
+            var evseId            = signedEVSEId ?? ContainerInfos?.FirstEVSEId;
 
-            var chargingStation = new ChargingStation(
-                                      signedChargingStationId ?? ContainerInfos?.FirstChargingStationId ?? meterSerial,
-                                      EVSEs:         evseId is not null
-                                                         ? [ new EVSE(evseId, EnergyMeters: [ energyMeter ]) ]
-                                                         : null,
-                                      EnergyMeters:  evseId is null
-                                                         ? [ energyMeter ]
-                                                         : null
-                                  );
+            // Where the station stands, what it is called and what software it
+            // runs are things an OCMF document never says. They come from the
+            // container and have to be carried through, because they are the whole
+            // reason a container exists — and an EV driver who is shown only a
+            // meter serial number has been told less than the file contained.
+            var containerStation  = ContainerInfos?.ChargingStations.FirstOrDefault();
+            var containerEVSE     = containerStation?.EVSEs.FirstOrDefault();
+
+            var chargingStation   = new ChargingStation(
+                                        signedChargingStationId ?? containerStation?.Id ?? meterSerial,
+                                        Description:   containerStation?.Description,
+                                        Firmware:      containerStation?.Firmware,
+                                        Address:       containerStation?.Address,
+                                        GeoLocation:   containerStation?.GeoLocation,
+                                        EVSEs:         evseId is not null
+                                                           ? [
+                                                                 new EVSE(
+                                                                     evseId,
+                                                                     Description:   containerEVSE?.Description,
+                                                                     EnergyMeters:  [ energyMeter ],
+                                                                     Connectors:    containerEVSE?.Connectors
+                                                                 )
+                                                             ]
+                                                           : null,
+                                        EnergyMeters:  evseId is null
+                                                           ? [ energyMeter ]
+                                                           : null
+                                    );
 
             record.AddChargingStation(chargingStation);
 

@@ -521,6 +521,17 @@ namespace cloud.charging.open.chargy
         /// their timestamps as text, several formats keep the meter's own UTC
         /// offset in them, and a re-rendered timestamp is a different timestamp.
         /// So the reader is told to leave strings alone.
+        ///
+        /// Numbers are deliberately left as doubles, which is Newtonsoft's default.
+        /// Reading them as decimals looks like the safer choice and is not: a
+        /// decimal remembers that a meter wrote "0.00" rather than "0", canonical
+        /// JSON renders numbers the ECMAScript way, and the OCMF session identity
+        /// is a hash over that canonical form. Preserving the trailing zeros
+        /// therefore gives the same charging session a different identity from the
+        /// one every other implementation computes. The precision a double costs
+        /// is irrelevant here — meter readings stay far inside the fifteen
+        /// significant digits a double round-trips exactly — while the identity is
+        /// not negotiable.
         /// </summary>
         /// <param name="Text">A JSON document.</param>
         /// <exception cref="Newtonsoft.Json.JsonReaderException">When the text is not valid JSON.</exception>
@@ -529,7 +540,7 @@ namespace cloud.charging.open.chargy
 
             using var reader = new JsonTextReader(new StringReader(Text)) {
                                    DateParseHandling  = DateParseHandling.None,
-                                   FloatParseHandling = FloatParseHandling.Decimal
+                                   FloatParseHandling = FloatParseHandling.Double
                                };
 
             var json = JObject.Load(reader);
