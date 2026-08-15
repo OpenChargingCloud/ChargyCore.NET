@@ -100,7 +100,8 @@ ChargyCore.NET/
 │   │   ├── EDL40/        EDL40Format.cs, EDL40Crypt01.cs, EDL40Document.cs,
 │   │   │                 EDL40SignatureData.cs, EDL40Measurement.cs,
 │   │   │                 SmlReader.cs, SmlValue.cs
-│   │   ├── Mennekes/     Mennekes.cs, MennekesCrypt01.cs
+│   │   ├── Mennekes/     MennekesFormat.cs, MennekesCrypt01.cs,
+│   │   │                 MennekesChargingProcess.cs, MennekesMeasurement.cs
 │   │   ├── ChargePoint/  ChargePoint.cs, ChargePointCrypt01.cs
 │   │   ├── PCDF/         PCDF.cs, PCDFCrypt01.cs
 │   │   └── QIDigital/    DCC.cs, DCoA.cs, DCoC.cs
@@ -457,7 +458,22 @@ infrastructure. Every step is a self-contained increment: format + its `ACrypt` 
    GDF is ported but has no fixture in either implementation. Its tests confirm the
    plumbing — dispatch, curve, full-hash verification — and say plainly that they
    cannot confirm the byte layout, because they sign the very buffer this port builds.
-5. **Mennekes** → `MennekesTests` (7)
+5. **Mennekes** ✅ **done** → `MennekesTests` (7).
+   The only format that describes whole *charging processes* rather than a stream of
+   readings: each one carries exactly two signed readings plus the token the driver
+   authorized with, so there is nothing to reassemble into sessions — the document
+   already says which readings belong together.
+   Which is exactly why it needs checks a signature cannot give. The meter signs each
+   reading on its own, so two perfectly genuine readings from two *different* charging
+   processes would both verify, and billing the difference between them would be
+   wrong. The event counter, the page numbers and the direction of the reading are
+   what tie them together, and a process failing those is reported as
+   `InvalidMeasurement` rather than as a bad signature — the signatures are real, and
+   saying otherwise would accuse the meter of something it did not do.
+   Two details: the meter signs *the time it displays*, so the stated UTC offset is
+   added rather than applied, and a 50 byte signature is not a longer signature —
+   only its first 48 bytes are checked, and the other two belong inside the signed
+   block where a 48 byte signature puts the event counter instead.
 6. **ChargePoint** → `ChargePointTests` (6)
 7. **PCDF** → `PCDFTests` (16)
 8. **PTB container + XMLContainer + KEBA** → (3)

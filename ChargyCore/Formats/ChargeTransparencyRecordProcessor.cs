@@ -23,6 +23,7 @@ using cloud.charging.open.chargy.Formats.BSM;
 using cloud.charging.open.chargy.Formats.EDL40;
 using cloud.charging.open.chargy.Formats.EMH;
 using cloud.charging.open.chargy.Formats.GDF;
+using cloud.charging.open.chargy.Formats.Mennekes;
 using cloud.charging.open.chargy.Formats.OCMF;
 
 #endregion
@@ -259,6 +260,10 @@ namespace cloud.charging.open.chargy.Formats
 
                     case GDFCrypt01.SessionContext:
                         method = new GDFCrypt01(I18N, LookupMeter);
+                        break;
+
+                    case MennekesFormat.SessionContext:
+                        method = new MennekesCrypt01(I18N, LookupMeter);
                         break;
 
                 }
