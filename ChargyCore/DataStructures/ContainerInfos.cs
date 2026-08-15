@@ -35,6 +35,8 @@ namespace cloud.charging.open.chargy
         #region Data
 
         private readonly List<ChargingStation>  chargingStations  = [];
+        private readonly List<EVSE>             evses             = [];
+        private readonly List<Connector>        connectors        = [];
         private readonly List<Warning>          warnings          = [];
 
         #endregion
@@ -44,6 +46,20 @@ namespace cloud.charging.open.chargy
         /// <summary>The charging stations the container described.</summary>
         public IReadOnlyList<ChargingStation>  ChargingStations
             => chargingStations;
+
+        /// <summary>
+        /// EVSEs the container described without naming a charging station.
+        ///
+        /// Some containers know which socket was used and nothing about the
+        /// cabinet it sits in. Inventing a charging station to hold such an EVSE
+        /// would put an identification into the record that no file ever stated.
+        /// </summary>
+        public IReadOnlyList<EVSE>             EVSEs
+            => evses;
+
+        /// <summary>Connectors the container described without naming an EVSE.</summary>
+        public IReadOnlyList<Connector>        Connectors
+            => connectors;
 
         /// <summary>Everything about the container that looked wrong but was not fatal.</summary>
         public IReadOnlyList<Warning>          Warnings
@@ -70,6 +86,34 @@ namespace cloud.charging.open.chargy
         public ContainerInfos AddChargingStation(ChargingStation ChargingStation)
         {
             chargingStations.Add(ChargingStation);
+            return this;
+        }
+
+        #endregion
+
+        #region AddEVSE           (EVSE)
+
+        /// <summary>
+        /// Add an EVSE the container described without naming a charging station.
+        /// </summary>
+        /// <param name="EVSE">An EVSE.</param>
+        public ContainerInfos AddEVSE(EVSE EVSE)
+        {
+            evses.Add(EVSE);
+            return this;
+        }
+
+        #endregion
+
+        #region AddConnector      (Connector)
+
+        /// <summary>
+        /// Add a connector the container described without naming an EVSE.
+        /// </summary>
+        /// <param name="Connector">A connector.</param>
+        public ContainerInfos AddConnector(Connector Connector)
+        {
+            connectors.Add(Connector);
             return this;
         }
 
@@ -106,10 +150,30 @@ namespace cloud.charging.open.chargy
         /// </summary>
         public String? FirstEVSEId
 
+            => FirstEVSE?.Id;
+
+        /// <summary>
+        /// The first EVSE the container described, wherever it described it.
+        /// </summary>
+        public EVSE? FirstEVSE
+
             => chargingStations.Count > 0 &&
                chargingStations[0].EVSEs.Count > 0
-                   ? chargingStations[0].EVSEs[0].Id
-                   : null;
+                   ? chargingStations[0].EVSEs[0]
+                   : evses.Count > 0
+                         ? evses[0]
+                         : null;
+
+        /// <summary>
+        /// The first connector the container described, wherever it described it.
+        /// </summary>
+        public Connector? FirstConnector
+
+            => FirstEVSE?.Connectors.Count > 0
+                   ? FirstEVSE.Connectors[0]
+                   : connectors.Count > 0
+                         ? connectors[0]
+                         : null;
 
         #endregion
 

@@ -43,6 +43,12 @@ namespace cloud.charging.open.chargy
     /// <param name="Values">The signed readings.</param>
     /// <param name="Context">An optional JSON-LD context.</param>
     /// <param name="Unit">An optional unit, e.g. "kWh".</param>
+    /// <param name="CurrentType">
+    /// Whether the energy was measured on alternating or direct current, "AC" or
+    /// "DC". It is not a detail of presentation: the two are measured by different
+    /// hardware, and a meter that says which it was is saying which of its own
+    /// calibrations the reading rests on.
+    /// </param>
     /// <param name="UnitEncoded">An optional numeric unit code, as used by the SML based formats.</param>
     /// <param name="ValueType">An optional value type.</param>
     /// <param name="VerifyChain">Whether the readings form a hash chain that has to be verified as a whole.</param>
@@ -56,6 +62,7 @@ namespace cloud.charging.open.chargy
                              IEnumerable<String>?            Context         = null,
                              String?                         Unit            = null,
                              UInt16?                         UnitEncoded     = null,
+                             String?                         CurrentType     = null,
                              String?                         ValueType       = null,
                              Boolean?                        VerifyChain     = null,
                              SignatureInfos?                 SignatureInfos  = null,
@@ -93,6 +100,9 @@ namespace cloud.charging.open.chargy
 
         /// <summary>An optional numeric unit code, as used by the SML based formats.</summary>
         public UInt16?                          UnitEncoded           { get; }      = UnitEncoded;
+
+        /// <summary>Whether the energy was measured on alternating or direct current.</summary>
+        public String?                          CurrentType           { get; }      = CurrentType;
 
         /// <summary>An optional value type.</summary>
         public String?                          ValueType             { get; }      = ValueType;
@@ -176,6 +186,7 @@ namespace cloud.charging.open.chargy
                                   PublicKey.ParseContext(JSON["@context"]),
                                   JSON["unit"]?.        Value<String>(),
                                   JSON["unitEncoded"]?. Value<UInt16>(),
+                                  JSON["currentType"]?. Value<String>(),
                                   JSON["valueType"]?.   Value<String>(),
                                   JSON["verifyChain"]?. Value<Boolean>(),
                                   signatureInfos,
@@ -230,6 +241,9 @@ namespace cloud.charging.open.chargy
 
             if (UnitEncoded.HasValue)
                 json.Add(new JProperty("unitEncoded",     UnitEncoded.Value));
+
+            if (CurrentType    is not null)
+                json.Add(new JProperty("currentType",     CurrentType));
 
             if (ValueType      is not null)
                 json.Add(new JProperty("valueType",       ValueType));

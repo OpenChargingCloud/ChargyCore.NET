@@ -19,6 +19,29 @@ namespace cloud.charging.open.chargy.Formats.OCMF
 {
 
     /// <summary>
+    /// What an OCMF pagination counter counts.
+    ///
+    /// The counter is prefixed with a letter, and the letter decides what the
+    /// document is: "T" counts the charging sessions a meter has signed, "F" the
+    /// fiscal readings it has taken on its own. The two are separate sequences,
+    /// so a gap in one is not a gap in the other.
+    /// </summary>
+    public enum OCMFTransactionType
+    {
+
+        /// <summary>Neither — which makes the document unreadable.</summary>
+        Undefined,
+
+        /// <summary>A charging session, OCMF "T".</summary>
+        Transaction,
+
+        /// <summary>A fiscal reading, OCMF "F".</summary>
+        Fiscal
+
+    }
+
+
+    /// <summary>
     /// One reading of an OCMF document.
     ///
     /// The document travels with the reading because an OCMF signature covers the
@@ -32,19 +55,63 @@ namespace cloud.charging.open.chargy.Formats.OCMF
     /// <param name="Timestamp">When the value was measured, as an ISO 8601 string.</param>
     /// <param name="Value">The measured value.</param>
     /// <param name="Document">The document this reading was read out of.</param>
-    public class OCMFMeasurementValue(String        Timestamp,
-                                      Decimal       Value,
-                                      OCMFDocument  Document)
+    /// <param name="TimeSync">How the meter's clock was synchronised, OCMF "TM" second part.</param>
+    /// <param name="Transaction">Where in the charging session this reading was taken, OCMF "TX".</param>
+    /// <param name="TransactionType">What the pagination counter counts.</param>
+    /// <param name="Pagination">The pagination counter of the document, OCMF "PG" without its prefix.</param>
+    /// <param name="ErrorIndex">An optional error index, OCMF "EI" — OCMF 0.1 only.</param>
+    /// <param name="ErrorFlags">Optional error flags, OCMF "EF" — OCMF 1.x onwards.</param>
+    /// <param name="CumulatedLoss">
+    /// The energy the meter has compensated for the charging cable so far, OCMF "CL".
+    ///
+    /// Absent when the meter wrote a zero: a compensation of nothing is what every
+    /// reading before the first loss carries, and showing "0 kWh compensated"
+    /// alongside a reading suggests a compensation took place.
+    /// </param>
+    /// <param name="StatusMeter">The status word of the energy meter, OCMF "ST".</param>
+    public class OCMFMeasurementValue(String                Timestamp,
+                                      Decimal               Value,
+                                      OCMFDocument          Document,
+                                      String?               TimeSync         = null,
+                                      String?               Transaction      = null,
+                                      OCMFTransactionType   TransactionType  = OCMFTransactionType.Undefined,
+                                      UInt64                Pagination       = 0,
+                                      Decimal?              ErrorIndex       = null,
+                                      String?               ErrorFlags       = null,
+                                      Decimal?              CumulatedLoss    = null,
+                                      String?               StatusMeter      = null)
 
         : MeasurementValue(Timestamp,
-                           Value)
+                           Value,
+                           StatusMeter: StatusMeter)
 
     {
 
         #region Properties
 
         /// <summary>The document this reading was read out of.</summary>
-        public OCMFDocument Document { get; } = Document;
+        public OCMFDocument         Document           { get; } = Document;
+
+        /// <summary>How the meter's clock was synchronised.</summary>
+        public String?              TimeSync           { get; } = TimeSync;
+
+        /// <summary>Where in the charging session this reading was taken.</summary>
+        public String?              Transaction        { get; } = Transaction;
+
+        /// <summary>What the pagination counter counts.</summary>
+        public OCMFTransactionType  TransactionType    { get; } = TransactionType;
+
+        /// <summary>The pagination counter of the document.</summary>
+        public UInt64               Pagination         { get; } = Pagination;
+
+        /// <summary>An optional error index.</summary>
+        public Decimal?             ErrorIndex         { get; } = ErrorIndex;
+
+        /// <summary>Optional error flags.</summary>
+        public String?              ErrorFlags         { get; } = ErrorFlags;
+
+        /// <summary>The energy compensated for the charging cable so far.</summary>
+        public Decimal?             CumulatedLoss      { get; } = CumulatedLoss;
 
         #endregion
 

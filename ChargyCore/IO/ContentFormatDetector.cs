@@ -1056,17 +1056,28 @@ namespace cloud.charging.open.chargy.IO
 
             #endregion
 
-            var merged = new ChargeTransparencyRecord(
-                             records[0].Id,
-                             records[0].Context,
-                             begin,
-                             end,
-                             records.Select(record => record.Description).FirstOrDefault(description => description is not null)
-                         );
+            // There is nothing to merge when one file held the only record, and
+            // merging it into a fresh one would quietly drop whatever the format
+            // put on it beyond the common model: its warnings, its certainty, and
+            // the format-specific fields of a record such as OCMF's. Handing over
+            // a public key alongside a charging session must not cost the session
+            // half of what was read out of it.
+            var merged = records.Length == 1
+                             ? records[0]
+                             : new ChargeTransparencyRecord(
+                                   records[0].Id,
+                                   records[0].Context,
+                                   begin,
+                                   end,
+                                   records.Select(record => record.Description).FirstOrDefault(description => description is not null)
+                               );
 
             foreach (var processedFile in ProcessedFiles)
                 switch (processedFile.Result)
                 {
+
+                    case ChargeTransparencyRecord record when ReferenceEquals(record, merged):
+                        break;
 
                     case ChargeTransparencyRecord record:
                         {

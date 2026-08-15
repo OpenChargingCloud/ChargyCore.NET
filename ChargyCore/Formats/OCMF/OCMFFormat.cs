@@ -227,15 +227,75 @@ namespace cloud.charging.open.chargy.Formats.OCMF
             var first    = Documents[0];
             var payload  = first.Payload;
 
-            #region What the meter says about itself
+            #region What the meter and the gateway say about themselves
+
+            // OCMF 0.1 called the signing device "VI"/"VV"; from 1.0 on the same
+            // two facts are "GI"/"GV". Either way they describe the gateway that
+            // relayed the readings, not the meter that took them.
+            var formatVersion       = Text(payload, "FV");
+            var gatewayInformation  = Text(payload, "GI") ?? Text(payload, "VI");
+            var gatewaySerial       = Text(payload, "GS");
+            var gatewayVersion      = Text(payload, "GV") ?? Text(payload, "VV");
+
+            var meterVendor         = Text(payload, "MV");
+            var meterModel          = Text(payload, "MM");
+            var meterSerialNumber   = Text(payload, "MS");
+            var meterFirmware       = Text(payload, "MF");
 
             // "MS" is the meter's own serial; "GS" the gateway's. A record that
             // names neither cannot say which device produced the readings.
-            var meterSerial  = Text(payload, "MS") ?? Text(payload, "GS");
+            var meterSerial  = meterSerialNumber ?? gatewaySerial;
             var paging       = Text(payload, "PG");
 
             if (meterSerial is null || paging is null)
                 return Invalid("UnknownOrInvalidChargingSessionFormat");
+
+            #endregion
+
+            #region What the pagination counter counts, and how far it has counted
+
+            // The prefix decides what the document is: "T" counts the charging
+            // sessions the meter has signed, "F" the fiscal readings it takes on
+            // its own. They are separate sequences, so a gap in one is not a gap
+            // in the other — and a counter that says neither leaves a reading in
+            // no sequence at all, where no gap could ever be noticed.
+            var paged = ParsePaging(paging);
+
+            if (paged is not (OCMFTransactionType, UInt64) firstPaging)
+                return Invalid(
+                           paging.Length > 0 && Char.ToLowerInvariant(paging[0]) is 't' or 'f'
+                               ? "The given OCMF data does not have a valid pagination counter!"
+                               : "The given OCMF data does not have a valid transaction type!"
+                       );
+
+            #endregion
+
+            #region The tariff, which OCMF signs as free text
+
+            var tariffText      = Text(payload, "TT");
+
+            var bonnTariff      = tariffText is not null &&
+                                  OCMFBonnTariff.TryParse(tariffText, out var parsedBonnTariff)
+                                      ? parsedBonnTariff
+                                      : null;
+
+            // A tariff text that is not one of the Bonn profiles still names the
+            // tariff that was applied — it just names one nothing can price. It
+            // is kept as a bare identification, so that a receipt can say what it
+            // was billed under instead of saying nothing at all.
+            var chargingTariff  = tariffText is not null && tariffText.Length > 0
+                                      ? bonnTariff?.ToChargingTariff() ?? new ChargingTariff(tariffText)
+                                      : null;
+
+            #endregion
+
+            #region What the meter compensates for the charging cable
+
+            var controllerFirmwareVersion  = Text(payload, "CF");
+
+            var lossCompensation           = OCMFLossCompensation.TryParse(payload["LC"] as JObject, out var parsedLossCompensation)
+                                                 ? parsedLossCompensation
+                                                 : null;
 
             #endregion
 
@@ -286,6 +346,14 @@ namespace cloud.charging.open.chargy.Formats.OCMF
             foreach (var document in Documents)
             {
 
+                // Each document carries its own counter, and each reading is
+                // stamped with the one it actually arrived under. ChargyCore.TS
+                // stamps every reading with the first document's counter, which
+                // is invisible for a single-document record and wrong for the
+                // KEBA records, where a hundred documents with a hundred
+                // different counters make up one charging session.
+                var (transactionType, pagination) = ParsePaging(Text(document.Payload, "PG")) ?? firstPaging;
+
                 // OCMF lets a reading omit a field that has not changed since the
                 // previous one — but only within the same signed record. Dropping
                 // such a reading would lose a signed meter value.
@@ -322,12 +390,27 @@ namespace cloud.charging.open.chargy.Formats.OCMF
                         new OCMFMeasurementValue(
                             ocmfReading.Timestamp,
                             ocmfReading.Value,
-                            document
+                            document,
+                            ocmfReading.TimeSync,
+                            ocmfReading.Transaction,
+                            transactionType,
+                            pagination,
+                            ocmfReading.ErrorIndex,
+                            ocmfReading.ErrorFlags,
+                            // A compensation of nothing is what every reading
+                            // before the first loss carries. Showing "0 kWh
+                            // compensated" would suggest that a compensation
+                            // took place.
+                            ocmfReading.CumulatedLoss != 0 ? ocmfReading.CumulatedLoss : null,
+                            ocmfReading.Status
                         ) {
                             // The reading is not signed on its own: the signature
                             // covers the whole OCMF document it arrived in, so its
-                            // verdict is what every reading inside inherits.
-                            Result = new CryptoResult(document.ValidationStatus)
+                            // verdict is what every reading inside inherits — and
+                            // so is the reason behind the verdict, which is the
+                            // difference between telling an EV driver "invalid"
+                            // and telling them why.
+                            Result = ResultOf(document)
                         }
                     );
 
@@ -346,7 +429,8 @@ namespace cloud.charging.open.chargy.Formats.OCMF
                                               0,
                                               values,
                                               [ MeasurementContext ],
-                                              Unit: reading.Unit
+                                              Unit:         reading.Unit,
+                                              CurrentType:  reading.CurrentType
                                           );
 
                                }).ToList();
@@ -392,20 +476,54 @@ namespace cloud.charging.open.chargy.Formats.OCMF
                                                                                           ? payload["IS"]!.Value<Boolean>()
                                                                                           : null,
                                                                IdentificationLevel:   Text(payload, "IL"),
-                                                               IdentificationFlags:   TextArray(payload, "IF")
+                                                               IdentificationFlags:   TextArray(payload, "IF"),
+                                                               // OCMF 0.1 wrote a word here where 1.x writes a
+                                                               // boolean, and the word is what that meter said.
+                                                               IdentificationStatusText: Text(payload, "IS")
                                                            )
                                   };
 
-            var record = new ChargeTransparencyRecord(
+            if (chargingTariff is not null)
+            {
+                chargingSession.TariffId = chargingTariff.Id;
+                chargingSession.AddChargingTariff(chargingTariff);
+            }
+
+            var record = new OCMFChargeTransparencyRecord(
                              sessionId,
+                             new OCMFInfo {
+                                 FormatVersion                  = formatVersion,
+                                 GatewayInformation             = gatewayInformation,
+                                 GatewaySerial                  = gatewaySerial,
+                                 GatewayVersion                 = gatewayVersion,
+                                 MeterVendor                    = meterVendor,
+                                 MeterModel                     = meterModel,
+                                 MeterSerial                    = meterSerialNumber,
+                                 MeterFirmware                  = meterFirmware,
+                                 TariffText                     = tariffText,
+                                 TariffTextInterpretation       = bonnTariff,
+                                 ControllerFirmwareVersion      = controllerFirmwareVersion,
+                                 LossCompensation               = lossCompensation,
+                                 ChargePointIdentificationType  = Text(payload, "CT"),
+                                 ChargePointIdentification      = Text(payload, "CI")
+                             },
                              [ "https://open.charging.cloud/contexts/CTR+json" ],
                              begin,
                              end,
                              Certainty:  1,
-                             Status:     SessionVerificationResult.Unvalidated
+                             // The record is as good as the weakest document it
+                             // was built from: one signature that does not hold
+                             // is enough to make the whole account of the
+                             // charging session unproven.
+                             Status:     Documents.All(document => document.ValidationStatus == VerificationResult.ValidSignature)
+                                             ? SessionVerificationResult.ValidSignature
+                                             : SessionVerificationResult.InvalidSignature
                          );
 
             record.AddChargingSession(chargingSession);
+
+            if (chargingTariff is not null)
+                record.AddChargingTariff(chargingTariff);
 
             #region The energy meter, so that the record says which device signed
 
@@ -419,54 +537,115 @@ namespace cloud.charging.open.chargy.Formats.OCMF
 
             var energyMeter = new EnergyMeter(
                                   meterSerial,
-                                  Manufacturer:     Text(payload, "MV") is String vendor
-                                                        ? new Manufacturer(vendor, Contact: containerMeter?.Manufacturer?.Contact)
+                                  Manufacturer:     meterVendor is not null
+                                                        ? new Manufacturer(meterVendor, Contact: containerMeter?.Manufacturer?.Contact)
                                                         : containerMeter?.Manufacturer,
-                                  Model:            Text(payload, "MM") is String model
-                                                        ? new DeviceModel(model, URL: containerMeter?.Model?.URL)
+                                  Model:            meterModel is not null
+                                                        ? new DeviceModel(meterModel, URL: containerMeter?.Model?.URL)
                                                         : containerMeter?.Model,
-                                  Firmware:         Text(payload, "MF") is String meterFirmware
+                                  Firmware:         meterFirmware is not null
                                                         ? new Firmware(meterFirmware)
                                                         : containerMeter?.Firmware,
                                   Hardware:         containerMeter?.Hardware,
                                   SignatureFormat:  MeasurementContext
                               );
 
-            // The meter hangs off the EVSE when the record names one, and off the
-            // charging station otherwise — so that a verification can find it
-            // either way rather than depending on how complete the record is.
-            var evseId            = signedEVSEId ?? ContainerInfos?.FirstEVSEId;
-
             // Where the station stands, what it is called and what software it
             // runs are things an OCMF document never says. They come from the
             // container and have to be carried through, because they are the whole
             // reason a container exists — and an EV driver who is shown only a
             // meter serial number has been told less than the file contained.
-            var containerStation  = ContainerInfos?.ChargingStations.FirstOrDefault();
-            var containerEVSE     = containerStation?.EVSEs.FirstOrDefault();
+            var containerStation    = ContainerInfos?.ChargingStations.FirstOrDefault();
+            var containerEVSE       = ContainerInfos?.FirstEVSE;
+            var containerConnector  = ContainerInfos?.FirstConnector;
 
-            var chargingStation   = new ChargingStation(
-                                        signedChargingStationId ?? containerStation?.Id ?? meterSerial,
-                                        Description:   containerStation?.Description,
-                                        Firmware:      containerStation?.Firmware,
-                                        Address:       containerStation?.Address,
-                                        GeoLocation:   containerStation?.GeoLocation,
-                                        EVSEs:         evseId is not null
-                                                           ? [
-                                                                 new EVSE(
-                                                                     evseId,
-                                                                     Description:   containerEVSE?.Description,
-                                                                     EnergyMeters:  [ energyMeter ],
-                                                                     Connectors:    containerEVSE?.Connectors
-                                                                 )
-                                                             ]
-                                                           : null,
-                                        EnergyMeters:  evseId is null
-                                                           ? [ energyMeter ]
-                                                           : null
-                                    );
+            // The meter hangs off the EVSE when the record names one, and off the
+            // charging station otherwise — so that a verification can find it
+            // either way rather than depending on how complete the record is.
+            var evseId              = signedEVSEId ?? containerEVSE?.Id;
+
+            // "CF" is the firmware of the charging controller, and it is signed,
+            // so it wins over anything the container claims. It goes onto a
+            // station the record actually names and no further: where nothing
+            // named one, Chargy invents a station to hold the meter, and giving
+            // that invention a signed version would attach a real fact to a
+            // device the file never mentioned.
+            var namedStationId      = signedChargingStationId ?? containerStation?.Id;
+
+            var chargingStation     = new ChargingStation(
+                                          namedStationId ?? meterSerial,
+                                          Description:   containerStation?.Description,
+                                          Firmware:      namedStationId is not null && controllerFirmwareVersion is not null
+                                                             ? new Firmware(
+                                                                   controllerFirmwareVersion,
+                                                                   containerStation?.Firmware?.ReleaseDate,
+                                                                   containerStation?.Firmware?.URL,
+                                                                   containerStation?.Firmware?.Checksum,
+                                                                   containerStation?.Firmware?.Description
+                                                               )
+                                                             : containerStation?.Firmware,
+                                          Address:       containerStation?.Address,
+                                          GeoLocation:   containerStation?.GeoLocation,
+                                          EVSEs:         evseId is not null
+                                                             ? [
+                                                                   new EVSE(
+                                                                       evseId,
+                                                                       Description:   containerEVSE?.Description,
+                                                                       EnergyMeters:  [ energyMeter ],
+                                                                       Connectors:    containerEVSE?.Connectors
+                                                                   )
+                                                               ]
+                                                             : null,
+                                          EnergyMeters:  evseId is null
+                                                             ? [ energyMeter ]
+                                                             : null
+                                      );
 
             record.AddChargingStation(chargingStation);
+
+            #endregion
+
+            #region The connector, and the cable whose losses the meter accounted for
+
+            // A cable is described from two sides: the container knows how long
+            // it is, the meter knows what it compensated for. Only the second is
+            // signed, so only the second may overwrite — and where the meter said
+            // nothing, e.g. gave the compensation no name, the container's answer
+            // stands.
+            var connectorId  = signedConnectorId ?? containerConnector?.Id;
+
+            if (connectorId is not null || lossCompensation is not null)
+            {
+
+                var matchingConnector = containerConnector is not null &&
+                                        containerConnector.Id == connectorId
+                                            ? containerConnector
+                                            : null;
+
+                chargingSession.ConnectorId ??= connectorId;
+                chargingSession.Connector     = new Connector(
+                                                    connectorId,
+                                                    matchingConnector?.Type,
+                                                    lossCompensation is not null
+                                                        ? new Cable(
+                                                              matchingConnector?.Cable?.Length,
+                                                              lossCompensation.Resistance,
+                                                              lossCompensation.Unit,
+                                                              lossCompensation.Name                     ?? matchingConnector?.Cable?.LossCompensation,
+                                                              lossCompensation.Identification?.ToString(CultureInfo.InvariantCulture) ?? matchingConnector?.Cable?.LossCompensationId
+                                                          )
+                                                        : matchingConnector?.Cable
+                                                );
+
+            }
+
+            #endregion
+
+            #region What the session points at, so a report never has to search for it
+
+            chargingSession.ChargingStation  = chargingStation;
+            chargingSession.EVSE             = chargingStation.EVSEs.FirstOrDefault();
+            chargingSession.EnergyMeter      = energyMeter;
 
             #endregion
 
@@ -543,10 +722,67 @@ namespace cloud.charging.open.chargy.Formats.OCMF
                            value,
                            obis ?? "?",
                            unit,
-                           currentType
+                           currentType,
+                           timeParts[1],
+                           transaction,
+                           Number(Reading, "EI"),
+                           Text  (Reading, "EF"),
+                           Number(Reading, "CL"),
+                           status
                        ),
                        null
                    );
+
+        }
+
+        #endregion
+
+        #region (private, static) ParsePaging(Paging)
+
+        /// <summary>
+        /// Read an OCMF pagination counter, e.g. "T12345".
+        /// </summary>
+        /// <param name="Paging">An OCMF "PG" value.</param>
+        private static (OCMFTransactionType TransactionType, UInt64 Pagination)? ParsePaging(String? Paging)
+        {
+
+            if (Paging is null || Paging.Length < 2)
+                return null;
+
+            var transactionType = Char.ToLowerInvariant(Paging[0]) switch {
+                                      't'  => OCMFTransactionType.Transaction,
+                                      'f'  => OCMFTransactionType.Fiscal,
+                                      _    => OCMFTransactionType.Undefined
+                                  };
+
+            if (transactionType == OCMFTransactionType.Undefined ||
+                !UInt64.TryParse(Paging.AsSpan(1), NumberStyles.None, CultureInfo.InvariantCulture, out var pagination))
+            {
+                return null;
+            }
+
+            return (transactionType, pagination);
+
+        }
+
+        #endregion
+
+        #region (private, static) ResultOf   (Document)
+
+        /// <summary>
+        /// The verdict a reading inherits from the document it arrived in,
+        /// together with everything that was found wrong along the way.
+        /// </summary>
+        /// <param name="Document">An OCMF document.</param>
+        private static CryptoResult ResultOf(OCMFDocument Document)
+        {
+
+            var result = new CryptoResult(Document.ValidationStatus);
+
+            foreach (var error in Document.Errors)
+                result.AddError(error);
+
+            return result;
 
         }
 
@@ -632,6 +868,22 @@ namespace cloud.charging.open.chargy.Formats.OCMF
 
         #endregion
 
+        #region (private, static) Number    (JSON, Key)
+
+        /// <summary>
+        /// A numeric property, or null when it is absent or not a number.
+        /// </summary>
+        /// <param name="JSON">A JSON object.</param>
+        /// <param name="Key">The name of a property.</param>
+        private static Decimal? Number(JObject  JSON,
+                                       String   Key)
+
+            => JSON[Key]?.Type is JTokenType.Integer or JTokenType.Float
+                   ? JSON[Key]!.Value<Decimal>()
+                   : null;
+
+        #endregion
+
         #region (private, static) TextArray (JSON, Key)
 
         /// <summary>
@@ -696,10 +948,22 @@ namespace cloud.charging.open.chargy.Formats.OCMF
     /// <param name="OBIS">Which register it read, as an OBIS code.</param>
     /// <param name="Unit">The unit of the value.</param>
     /// <param name="CurrentType">Whether the charging was AC or DC.</param>
-    internal readonly record struct OCMFReading(String   Timestamp,
-                                                Decimal  Value,
-                                                String   OBIS,
-                                                String   Unit,
-                                                String?  CurrentType);
+    /// <param name="TimeSync">How far the meter's clock can be trusted.</param>
+    /// <param name="Transaction">Where in the charging session the reading was taken.</param>
+    /// <param name="ErrorIndex">An error index, as OCMF 0.1 wrote it.</param>
+    /// <param name="ErrorFlags">Error flags, as OCMF 1.x writes them.</param>
+    /// <param name="CumulatedLoss">The energy compensated for the charging cable so far.</param>
+    /// <param name="Status">The status word of the energy meter.</param>
+    internal readonly record struct OCMFReading(String    Timestamp,
+                                                Decimal   Value,
+                                                String    OBIS,
+                                                String    Unit,
+                                                String?   CurrentType,
+                                                String?   TimeSync       = null,
+                                                String?   Transaction    = null,
+                                                Decimal?  ErrorIndex     = null,
+                                                String?   ErrorFlags     = null,
+                                                Decimal?  CumulatedLoss  = null,
+                                                String?   Status         = null);
 
 }

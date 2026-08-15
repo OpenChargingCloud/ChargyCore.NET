@@ -88,8 +88,11 @@ ChargyCore.NET/
 │   │   └── VerificationTrace.cs        replaces the HTML "view" API
 │   │
 │   ├── Formats/                        one sub-directory per transparency data format
-│   │   ├── OCMF/         OCMF.cs, OCMFv1_x.cs, OCMFDataStructures.cs,
-│   │   │                 OCMFVersion.cs, BETTariffTextExtension.cs
+│   │   ├── OCMF/         OCMFFormat.cs, OCMFCrypt01.cs, OCMFDocument.cs,
+│   │   │                 OCMFDocumentScanner.cs, OCMFMeasurement.cs,
+│   │   │                 OCMFSignatureAlgorithm.cs, OCMFSignatureValidator.cs,
+│   │   │                 OCMFSignatureDisplay.cs, OCMFBonnTariff.cs,
+│   │   │                 OCMFChargeTransparencyRecord.cs
 │   │   ├── Alfen/        Alfen.cs, AlfenCrypt01.cs
 │   │   ├── EMH/          EMHCrypt01.cs
 │   │   ├── GDF/          GDFCrypt01.cs
@@ -338,10 +341,11 @@ as a hard, automatically-checked contract — not a hope.
 | `Mennekes`, `SimpleURLs` | … | 7 each |
 | `ChargePoint`, `EMHCrypt01`, `OCMFVersions`, `SAFE_withChargyExtensions` | … | 6 each |
 | `PublicKeyFiles` | … | 5 |
-| `EDL40`, `OCMFTariffText` | … | 4 each |
+| `EDL40`, `OCMFTariffText` | `Formats/OCMFTariffTextTests` | 4 each |
 | `OCMF`, `ChargeTransparencyLiveLink`, `chargyInterfaces` | … | 3 each |
-| `OCMFDiagnostics`, `PTBContainer` | … | 2 each |
-| `KEBA`, `OCMFErrorPropagation` | … | 1 each |
+| `OCMFDiagnostics` + `OCMFErrorPropagation` | `Formats/OCMFDiagnosticsTests` (merged: three tests, one subject) | 3 |
+| `PTBContainer` | … | 2 |
+| `KEBA` | … | 1 |
 | `OCMFModernSignatures`, `OCMF_BET_TariffTextExtension`, `OCPI` | table-driven fixtures | n |
 
 ### 5.3 Additional .NET-only tests
@@ -384,7 +388,9 @@ Two additions over the original plan:
 > Note: `TestData/dataStructures.ts` and `TestData/OCMF/versionTestData.ts` are
 > TypeScript *test data definitions*, not charge transparency fixtures. They are kept
 > as the reference for the C# table-driven fixtures written in Phase 1 and Phase 4,
-> and are part of the 203 files asserted above.
+> and are part of the 203 files asserted above. `versionTestData.ts` is now mirrored
+> by `ChargyCoreTests/Formats/OCMFVersionTestData.cs`, whose seeded generator is the
+> same one bit for bit — so both implementations are fed the same generated documents.
 
 ### Phase 1 — Foundation ✅ **done**
 `ChargyLib` (hex, byte, OBIS, timestamp helpers — Span-based), the complete
@@ -425,8 +431,8 @@ infrastructure. Every step is a self-contained increment: format + its `ACrypt` 
    **by instant, not lexically**, because the timestamps keep the meter's own UTC offset.
    Documents are grouped by their session identity and only the first group becomes a
    record, which is what keeps two drivers on one meter from being merged into one bill.
-   Still open within OCMF: the BET tariff text extension, the version matrix, the
-   modern-signature fixtures (EdDSA / ML-DSA), diagnostics and error propagation.
+
+   The remaining OCMF sub-features were pulled in afterwards, see step 10.
 3. **EMH + EDL40 (SML)** ✅ **done** → `EMHCrypt01Tests` (6), `EDL40Tests` (12).
    EDL40 is the only format that is *never* detected on its own: an SML message carries
    no public key, so it can only be read inside a container that supplies one. It
@@ -557,6 +563,67 @@ infrastructure. Every step is a self-contained increment: format + its `ACrypt` 
    to be written out, so it is, with `TryParse`/`ToJSON` throughout and a round-trip
    test that says nothing was dropped and nothing invented. That is the only claim
    available without a real certificate, and it is stated as such.
+10. **The remaining OCMF sub-features** ✅ **done** → `OCMFTariffTextTests` (4),
+   `OCMFBETTariffTests` (20), `OCMFModernSignatureTests` (20), `OCMFVersionTests` (16),
+   `OCMFDiagnosticsTests` (3). Deferred from step 2 and pulled in here.
+
+   **The BET tariff text extension.** OCMF signs the tariff as free text in `TT`, which
+   leaves an EV driver with a price they cannot check: `001;EUR;100;59;10;120` states
+   what was charged only to somebody who already knows what the fields mean. The three
+   profiles agreed at the Bonner Eichrechtstage give that string a meaning, and
+   `OCMFBonnTariff` turns it into an ordinary charging tariff — the same shape a roaming
+   platform would have delivered, except that this one arrived inside the meter's
+   signature. A text that is *not* one of the three profiles is not an error: `TT` was
+   free text before the extension existed and still is, so it becomes a tariff carrying
+   only its own identification. Nine fixtures with expected mappings shared with
+   ChargyCore.TS pin the result, and each fixture's signature is checked against the key
+   it ships with — by BouncyCastle directly, not through Chargy, because a fixture is
+   only evidence of something if it is what it claims to be.
+
+   **What the payload says beyond the readings** now reaches the record.
+   `OCMFChargeTransparencyRecord` carries an `OCMFInfo` with the gateway, the meter, the
+   tariff text and its interpretation, the controller firmware and the loss
+   compensation; `OCMFMeasurementValue` carries the pagination counter, the transaction
+   type, the error index or flags, the cumulated loss and the meter status. `LC` becomes
+   the connector's cable, `CF` the charging station's firmware — but only where the
+   document or the container actually **named** a station: where nothing did, Chargy
+   invents one to hold the meter, and giving that invention a signed firmware version
+   would attach a real fact to a device no file ever mentioned.
+
+   **Errors reach the reading.** Every verification failure was already recorded on the
+   document as a stable key plus, where there is one, a technical detail. Those errors
+   are now copied onto each reading's `CryptoResult`, which is the difference between
+   telling an EV driver "invalid" and telling them why — and between "the signature does
+   not match", which says something about the charging session, and "this curve is not
+   implemented", which says something about Chargy.
+
+   **The version matrix.** The fixtures in this repository come from the meters somebody
+   happened to send a file from, which leaves whole OCMF versions covered by nothing.
+   `OCMFVersionTestData` generates one signed document per version, every field holding a
+   different value, and reads it back twice — with and without `FV`, because OCMF made
+   the version optional. The generator is ChargyCore.TS's, reproduced down to the bit
+   (FNV-1a seeding an xorshift32), so both implementations are fed the same documents;
+   the signature is made here with a key derived from the same stream, since neither
+   implementation signs deterministically and neither needs to.
+
+   **Modern signatures.** Ed25519, Ed448 and all three ML-DSA parameter sets verify end
+   to end, from a raw hex key and from the PEM the pipeline detects on its own. Each
+   fixture's PEM is checked to be the SPKI wrapper of its own raw key, since two files
+   claiming to hold the same key while holding different ones would make one half of
+   these tests verify a document the other half cannot. `OCMFSignatureDisplay` was ported
+   alongside: an EdDSA signature is r and s written one after the other and can be split,
+   an ML-DSA signature has no components to split, and an ECDSA signature is a DER
+   structure around two numbers — presenting all three alike would tell a reader that a
+   value is something it is not.
+
+   Two things were found along the way and fixed. `MergeChargeTransparencyRecords` built
+   a fresh record even when a single file had held the only one, silently dropping its
+   warnings, its certainty and everything a format-specific record carries: handing over
+   a public key alongside a charging session cost the session half of what had been read
+   out of it. And the `001-01__xss.ocmf` fixture, unused by either implementation, is now
+   read: HTML and JavaScript inside payload strings have to arrive **untouched**, because
+   those exact characters are what the meter signed and escaping them is the presentation
+   layer's job at the moment of presentation.
 
 ### Phase 5 — Live link & online features ⬜
 Hermod-based `IURLResolver`, live-link transports (HTTPS, HTTP SSE, WebSocket), TOTP.
@@ -650,6 +717,24 @@ eight bytes but sign-extends everything at or above 2^31 and wraps to zero at
 Harmless for real meter readings, which stay well below 2^31, and faithfully
 reproduced by `ChargyLib.GetInt64Bytes` so that genuine measurements keep
 verifying. Worth a bounds check in both implementations rather than a silent wrap.
+
+### Merging one record into a fresh one loses what the format put on it
+
+`MergeChargeTransparencyRecords` builds a new record and copies the fields it
+knows about. Its own comment says as much — *"the CTRs might have different
+@context values and additional context/format specific data!"* — and the case
+where it costs something is not an exotic one: an EV driver hands over a charging
+session **and its public key**, which is the ordinary way to verify anything. Two
+files, one record, and the merge runs.
+
+What does not survive the copy is everything the merge has no field for: the
+record's warnings, its certainty, its overall status, and — once a format carries
+more than the common model, as OCMF now does with its payload block — the
+format-specific data the comment already anticipated.
+
+This port returns the record itself when exactly one file held one, because there
+is nothing to merge in that case; the public keys and unreadable files are added
+to it. Worth the same in ChargyCore.TS.
 
 ---
 
@@ -761,6 +846,9 @@ short and reviewable, because every entry weakens the golden-file parity contrac
 |---|---|---|
 | OCMF `secp192k1` / `secp192r1` | Verified here, `InvalidPublicKey` in ChargyCore.TS | BouncyCastle carries the curves; the JavaScript library does not. Decision 9 |
 | `SmlReader` | SML lists may nest at most 64 levels | The reader is recursive and the input is a file somebody sent us. A few kilobytes of nothing but "list of one" exhausts the stack, and in .NET that ends the process instead of raising something catchable — a JavaScript engine turns the same input into an ordinary exception, so upstream needs no limit. A real GetListRes nests about seven levels. |
+| OCMF `ocmf.lossCompensation` | Carried only when it is one: `LR` and `LU` both present | ChargyCore.TS keeps the raw `LC` object whatever it holds and separately checks the two fields before building a cable. A typed model cannot hold a malformed one, and a resistance without a unit is not a resistance — carrying it as if it were would put a number into the record that means nothing. The cable is built under exactly the same condition in both. |
+| OCMF pagination on a reading | Each reading carries **its own** document's counter | ChargyCore.TS stamps every reading with the *first* document's counter. Invisible for a single-document record and wrong for the KEBA records, where a hundred documents with a hundred different counters make up one charging session. |
+| `Authorization.IdentificationStatusText` | New field, alongside the boolean | OCMF 1.x writes a boolean in `IS`; the 0.1 reference data of the SAFE transparency software wrote `"VERIFIED"`. ChargyCore.TS keeps whichever arrived in one loosely typed field. Reducing the word to `true` would claim the meter said something simpler than it did, and dropping it lost the only thing it said at all. |
 
 This costs exactly one golden file. `SAFE-Testdata-04` is signed with
 `ECDSA-secp192k1-SHA256`, so ChargyCore.TS reports `InvalidPublicKey` on three lines

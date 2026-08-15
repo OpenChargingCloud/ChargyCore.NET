@@ -325,7 +325,8 @@ namespace cloud.charging.open.chargy
                                String?               EMobilityProvider        = null,
                                Boolean?              IdentificationStatus     = null,
                                String?               IdentificationLevel      = null,
-                               IEnumerable<String>?  IdentificationFlags      = null)
+                               IEnumerable<String>?  IdentificationFlags      = null,
+                               String?               IdentificationStatusText = null)
     {
 
         #region Properties
@@ -353,6 +354,17 @@ namespace cloud.charging.open.chargy
 
         /// <summary>Whether the meter considered the driver's identification to be present and complete.</summary>
         public Boolean?               IdentificationStatus       { get; } = IdentificationStatus;
+
+        /// <summary>
+        /// The meter's own word for that state, where it wrote one instead of a
+        /// yes or a no.
+        ///
+        /// OCMF 1.x settled on a boolean, but the 0.1 reference data of the SAFE
+        /// transparency software wrote "VERIFIED". Reducing that to true would
+        /// claim the meter said something simpler than it did, and dropping it
+        /// would lose the only thing it said at all.
+        /// </summary>
+        public String?                IdentificationStatusText   { get; } = IdentificationStatusText;
 
         /// <summary>How the identification was assured.</summary>
         public String?                IdentificationLevel        { get; } = IdentificationLevel;
@@ -388,13 +400,16 @@ namespace cloud.charging.open.chargy
                                 JSON["chargingStationOperator"]?.Value<String>(),
                                 JSON["roamingNetwork"]?.         Value<String>(),
                                 JSON["eMobilityProvider"]?.      Value<String>(),
-                                JSON["identificationStatus"]?.   Value<Boolean>(),
+                                JSON["identificationStatus"]?.Type == JTokenType.Boolean
+                                    ? JSON["identificationStatus"]!.Value<Boolean>()
+                                    : null,
                                 JSON["identificationLevel"]?.    Value<String>(),
                                 JSON["identificationFlags"] is JArray flags
                                     ? flags.Select(flag => flag.Value<String>()).
                                             Where (flag => flag is not null).
                                             Cast<String>()
-                                    : null
+                                    : null,
+                                JSON["identificationStatusText"]?.Value<String>()
                             );
 
             return true;
@@ -438,6 +453,9 @@ namespace cloud.charging.open.chargy
 
             if (IdentificationStatus.HasValue)
                 json.Add(new JProperty("identificationStatus",    IdentificationStatus.Value));
+
+            if (IdentificationStatusText is not null)
+                json.Add(new JProperty("identificationStatusText", IdentificationStatusText));
 
             if (IdentificationLevel     is not null)
                 json.Add(new JProperty("identificationLevel",     IdentificationLevel));
