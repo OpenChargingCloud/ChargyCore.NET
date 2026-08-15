@@ -26,6 +26,7 @@ using org.GraphDefined.Vanaheimr.Illias;
 
 using cloud.charging.open.chargy.IO;
 using cloud.charging.open.chargy.Formats.Alfen;
+using cloud.charging.open.chargy.Formats.OCMF;
 
 #endregion
 
@@ -50,14 +51,17 @@ namespace cloud.charging.open.chargy.Formats.SAFEXML
     /// </summary>
     /// <param name="I18N">The dictionary used to describe what went wrong.</param>
     /// <param name="Alfen">The Alfen format, for containers carrying Alfen data.</param>
+    /// <param name="OCMF">The OCMF format, for containers carrying OCMF data.</param>
     public partial class SAFEXMLContainer(I18NDictionary  I18N,
-                                          AlfenFormat?    Alfen = null) : IXMLChargeTransparencyFormat
+                                          AlfenFormat?    Alfen = null,
+                                          OCMFFormat?     OCMF  = null) : IXMLChargeTransparencyFormat
     {
 
         #region Data
 
         private readonly I18NDictionary  i18n   = I18N;
         private readonly AlfenFormat?    alfen  = Alfen;
+        private readonly OCMFFormat?     ocmf   = OCMF;
 
         #endregion
 
@@ -176,8 +180,14 @@ namespace cloud.charging.open.chargy.Formats.SAFEXML
                                    ? alfen.TryParse(signedValues, containerInfos)
                                    : Unsupported();
 
-                    // OCMF and EDL40 arrive with their own steps of the port.
                     case "ocmf":
+                        return ocmf is not null
+                                   // The container carries the public key that the
+                                   // OCMF documents themselves do not.
+                                   ? ocmf.TryParse(signedValues, publicKeyText, keyEncoding, containerInfos)
+                                   : Unsupported();
+
+                    // EDL40 arrives with its own step of the port.
                     case "edl_40_p":
                     case "isa_edl_40_p":
                     case "sml_edl40_p":

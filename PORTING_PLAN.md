@@ -603,6 +603,28 @@ than worked around here — the `secp512r1` typo, the host-timezone dependency i
 signed timestamps, and the hardcoded OCMF session id. That is the preferred route:
 a deviation has to be maintained forever, an upstream fix does not.
 
+### Open against ChargyCore.TS v0.12.0 (OCMF)
+
+Two differences remain in the OCMF golden files. Both are localised; neither is
+guesswork.
+
+* **The session id of a multi-document group.** Every fixture whose group holds one
+  OCMF document matches byte for byte. The two whose group holds *two* — `OCMF-DZG-01`
+  and `SAFE-Testdata-02` — do not. Instrumenting ChargyCore.TS itself shows why this
+  is not a porting mistake: within a single call to `tryToParseOCMFv1_0`, the computed
+  `sessionId` is `OCMF-0506b9f7…` while re-evaluating the very same expression two
+  lines later gives `OCMF-cfbef549…`, which is also what this port computes and what
+  Node's own crypto and `@noble/hashes` both produce for the dumped input bytes
+  (2777 bytes, two 1388-character documents joined by one space). Upstream's own tests
+  pass, so the committed golden files agree with whatever `sessionId` actually holds —
+  the formula in the source and the value in the fixtures do not currently agree.
+  **This needs a decision upstream, not a workaround here.**
+
+* **`SAFE-Testdata-04` public key.** The golden file expects `InvalidPublicKey`; this
+  port reports `ValidSignature`. To be investigated — most likely the point encoding
+  or the curve check, and worth knowing which of the two implementations is right
+  before either is changed.
+
 ### Still to settle (not blocking)
 
 * **`PublicKeyParser.TryParseDER` handles named curves only.** A SubjectPublicKeyInfo

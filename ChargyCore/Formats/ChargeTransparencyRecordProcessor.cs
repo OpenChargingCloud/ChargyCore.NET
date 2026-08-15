@@ -19,6 +19,7 @@
 
 using cloud.charging.open.chargy.Crypto;
 using cloud.charging.open.chargy.Formats.Alfen;
+using cloud.charging.open.chargy.Formats.OCMF;
 
 #endregion
 
@@ -234,6 +235,10 @@ namespace cloud.charging.open.chargy.Formats
 
                     case AlfenFormat.SessionContext:
                         method = new AlfenCrypt01(I18N, LookupMeter);
+                        break;
+
+                    case OCMFFormat.SessionContext:
+                        method = new OCMFCrypt01(I18N, LookupMeter);
                         break;
 
                 }

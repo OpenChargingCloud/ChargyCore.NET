@@ -181,12 +181,14 @@ namespace cloud.charging.open.chargy.IO
 
             var i18n   = I18N ?? I18NDictionary.Default();
             var alfen  = new Formats.Alfen.AlfenFormat(i18n);
+            var ocmf   = new Formats.OCMF.OCMFFormat(i18n);
 
             return new () {
                        Alfen    = alfen,
+                       OCMF     = ocmf,
                        // The SAFE container carries someone else's signed data, so
                        // it has to know the formats it may be carrying.
-                       SAFEXML  = new Formats.SAFEXML.SAFEXMLContainer(i18n, alfen)
+                       SAFEXML  = new Formats.SAFEXML.SAFEXMLContainer(i18n, alfen, ocmf)
                    };
 
         }
