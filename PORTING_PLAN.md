@@ -405,6 +405,15 @@ infrastructure. Every step is a self-contained increment: format + its `ACrypt` 
 1. **SAFE XML container + Alfen** ✅ **done** → `AlfenTests` (7). Note the plan miscounted here:
    the `SAFE-Testdata-*` fixtures carry **OCMF** payloads, not Alfen ones, so `SAFETests`
    and `SAFE_withChargyExtensionsTests` unlock with step 2, not this one.
+2. **OCMF** 🚧 — the document scanner and signature validation are done (14 cases). The
+   charge transparency record building follows. Tracking ChargyCore.TS **v0.12.0**:
+   `dbe61c0` replaced the hardcoded OCMF session id with `"OCMF-" + SHA-256` of the
+   documents and derives `begin`/`end` from the readings, which regenerated ten golden
+   files. Two details of that fix have to be carried over exactly: the hash is over
+   `raw ?? rawPayload ?? canonicalJSON(payload)` joined with a single space, **not** over
+   `hashValue` (which follows the signature algorithm and is empty for the directly
+   signing ones); and the timestamps are ordered **by instant, not lexically**, because
+   they keep the meter's own UTC offset.
 2. **OCMF** (+ versions, modern signatures, tariff text, BET extension, diagnostics, error propagation) → (~16+)
 3. **EMH + EDL40 (SML)** → `EMHCrypt01Tests`, `EDL40Tests` (10)
 4. **chargeIT container + BSM + GDF** → `ChargeITTests` (11)
