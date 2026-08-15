@@ -51,6 +51,9 @@ namespace cloud.charging.open.chargy.Formats.EMH
 
         #region Data
 
+        /// <summary>The JSON-LD context of an EMH charging session.</summary>
+        public const String SessionContext   = "https://open.charging.cloud/contexts/SessionSignatureFormats/EMHCrypt01+json";
+
         /// <summary>The length of the block an EMH energy meter signs.</summary>
         public const Int32 SignedDataLength = 320;
 
@@ -135,7 +138,10 @@ namespace cloud.charging.open.chargy.Formats.EMH
             result.InfoStatus                   = ChargyLib.SetHex        (buffer, MeasurementValue.StatusMeter ?? "",                           14, false);
             result.SecondsIndex                 = ChargyLib.SetUInt32     (buffer, (UInt32) (MeasurementValue.SecondsIndex ?? 0),                15, true);
             result.PaginationId                 = ChargyLib.SetHex        (buffer, MeasurementValue.PaginationId ?? "",                          19, true);
-            result.OBIS                         = ChargyLib.SetHex        (buffer, ChargyLib.OBIS2Hex(measurement.OBIS),                         23, false);
+            // The OBIS code is part of what the meter signed, so a measurement
+            // that does not name what it measured leaves these bytes empty and
+            // fails its own signature — which is the honest outcome.
+            result.OBIS                         = ChargyLib.SetHex        (buffer, ChargyLib.OBIS2Hex(measurement.OBIS ?? ""),                  23, false);
             result.UnitEncoded                  = ChargyLib.SetInt8       (buffer, measurement.UnitEncoded ?? 0,                                 29);
             result.Scale                        = ChargyLib.SetInt8       (buffer, measurement.Scale,                                            30);
             result.Value                        = ChargyLib.SetUInt64     (buffer, MeasurementValue.Value,                                       31, true);

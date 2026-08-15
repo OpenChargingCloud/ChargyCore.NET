@@ -93,7 +93,10 @@ ChargyCore.NET/
 │   │   ├── Alfen/        Alfen.cs, AlfenCrypt01.cs
 │   │   ├── EMH/          EMHCrypt01.cs
 │   │   ├── GDF/          GDFCrypt01.cs
-│   │   ├── BSM/          BSMCrypt01.cs
+│   │   ├── BSM/          BSMFormat.cs, BSMCrypt01.cs, BSMSnapshot.cs,
+│   │   │                 BSMMeasurement.cs
+│   │   ├── ChargeIT/     ChargeITContainer.cs, ChargeITMeterValue.cs,
+│   │   │                 ChargeITOperator.cs, ChargeITFormatChecks.cs
 │   │   ├── EDL40/        EDL40Format.cs, EDL40Crypt01.cs, EDL40Document.cs,
 │   │   │                 EDL40SignatureData.cs, EDL40Measurement.cs,
 │   │   │                 SmlReader.cs, SmlValue.cs
@@ -435,7 +438,25 @@ infrastructure. Every step is a self-contained increment: format + its `ACrypt` 
    whose signatures nevertheless hold, and `isa-edl-40p-veri-fail` is byte-for-byte
    identical to `isa-edl-40p-ok` — its "failure" lives only in the container's unsigned
    `context` attribute, which must never be allowed to downgrade a signature.
-4. **chargeIT container + BSM + GDF** → `ChargeITTests` (11)
+4. **chargeIT container + BSM + GDF** ✅ **done** → `ChargeITTests` (13), `GDFCrypt01Tests` (3).
+   Two generations of the chargeIT container are in the field, and the older one
+   declares no context at all — so recognising it means checking whether it has the
+   right shape, and the share of those checks that passed becomes the record's
+   certainty. That number is what separates "a damaged chargeIT file" from "not a
+   chargeIT file", which are very different things to tell somebody holding a receipt.
+   BSM is the first format whose measurement reports **several quantities under one
+   signature** — energy since the session began, the meter's lifetime total, and
+   momentary power — so `Measurement.Name` and `.OBIS` had to become optional and
+   the parts name themselves per `Phenomenon`. The golden files say so directly:
+   they print `name: undefined`.
+   The two `chargeIT/bsm/ocmf*.xml` fixtures are not chargeIT at all — the path is
+   SAFE XML to OCMF, and only the meter is a BSM. They passed unchanged, but the
+   identification flags they carry did **not** reach the record: the verification
+   report does not print them, so the golden files could not catch it. That gap is
+   why upstream asserts them separately, and it is now closed here too.
+   GDF is ported but has no fixture in either implementation. Its tests confirm the
+   plumbing — dispatch, curve, full-hash verification — and say plainly that they
+   cannot confirm the byte layout, because they sign the very buffer this port builds.
 5. **Mennekes** → `MennekesTests` (7)
 6. **ChargePoint** → `ChargePointTests` (6)
 7. **PCDF** → `PCDFTests` (16)
@@ -494,6 +515,24 @@ reproducible everywhere, including the UTC CI runners.
 The proper fix in both implementations is to carry the charging station's time
 zone in the charge transparency record instead of guessing it from the verifier.
 That is a data model change and out of scope for the port.
+
+### Newtonsoft.Json rewrites timestamps unless told not to
+
+Found while porting BSM. `JObject.Parse` turns every string that looks like a date
+into a `DateTime`, and reading it back out as a string then yields .NET's rendering
+rather than the one in the file. `"2021-11-30T12:38:47+01:00"` came back as the
+empty string, and every BSM snapshot failed its own consistency check.
+
+This is not a formatting detail. The meters sign their timestamps as text, several
+formats keep the meter's own UTC offset in them, and `MeasurementValue.Timestamp`
+is documented to preserve exactly what the parser produced. A re-rendered timestamp
+is a different timestamp, and the reports shared with ChargyCore.TS print it
+verbatim. Every JSON entry point now goes through `ChargyLib.ParseJSON`, which sets
+`DateParseHandling.None` — and, while it is there, `FloatParseHandling.Decimal` so a
+meter reading never becomes a binary float, and a check that nothing follows the
+JSON object.
+
+This has no counterpart upstream: `JSON.parse` leaves strings alone.
 
 ### `getInt64Bytes()` is a 32 bit conversion
 

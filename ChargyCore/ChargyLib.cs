@@ -22,6 +22,9 @@ using System.Globalization;
 using System.Text;
 using System.Text.RegularExpressions;
 
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
+
 #endregion
 
 namespace cloud.charging.open.chargy
@@ -503,6 +506,42 @@ namespace cloud.charging.open.chargy
         public static DateTimeOffset ParseUnixTimestamp(Int64 UnixTime)
 
             => DateTimeOffset.FromUnixTimeSeconds(UnixTime);
+
+        #endregion
+
+        #region ParseJSON               (Text)
+
+        /// <summary>
+        /// Parse JSON without letting the reader reinterpret any of it.
+        ///
+        /// Newtonsoft.Json turns every string that looks like a date into a
+        /// DateTime by default, and reading it back out as a string then yields
+        /// .NET's rendering rather than the one in the file. For a charge
+        /// transparency record that is not a formatting detail: the meters sign
+        /// their timestamps as text, several formats keep the meter's own UTC
+        /// offset in them, and a re-rendered timestamp is a different timestamp.
+        /// So the reader is told to leave strings alone.
+        /// </summary>
+        /// <param name="Text">A JSON document.</param>
+        /// <exception cref="Newtonsoft.Json.JsonReaderException">When the text is not valid JSON.</exception>
+        public static JObject ParseJSON(String Text)
+        {
+
+            using var reader = new JsonTextReader(new StringReader(Text)) {
+                                   DateParseHandling  = DateParseHandling.None,
+                                   FloatParseHandling = FloatParseHandling.Decimal
+                               };
+
+            var json = JObject.Load(reader);
+
+            // Anything after the object would silently be ignored otherwise, and
+            // a file with a second document appended is not the file it claims.
+            if (reader.Read())
+                throw new JsonReaderException("Additional text found after the JSON object!");
+
+            return json;
+
+        }
 
         #endregion
 

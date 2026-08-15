@@ -159,8 +159,11 @@ namespace cloud.charging.open.chargy.tests
 
             var prefix = $"measurement {SessionNumber}.{MeasurementNumber}";
 
-            Lines.Add($"{prefix} name: {Measurement.Name}");
-            Lines.Add($"{prefix} obis: {Measurement.OBIS}");
+            // A measurement that reports several quantities at once has no single
+            // name or OBIS code, and the report says so in the same word
+            // JavaScript prints for an absent property.
+            Lines.Add($"{prefix} name: {Measurement.Name ?? "undefined"}");
+            Lines.Add($"{prefix} obis: {Measurement.OBIS ?? "undefined"}");
             Lines.Add($"{prefix} status: {Measurement.VerificationResult?.Status.AsText() ?? "unknown"}");
             Lines.Add($"{prefix} values: {Measurement.Values.Count}");
 

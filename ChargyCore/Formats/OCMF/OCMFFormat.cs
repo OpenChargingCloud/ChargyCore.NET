@@ -384,7 +384,15 @@ namespace cloud.charging.open.chargy.Formats.OCMF
                                       EnergyMeterId:      meterSerial,
                                       Measurements:       measurements
                                   ) {
-                                      AuthorizationStart = new Authorization(Text(payload, "ID") ?? "?")
+                                      AuthorizationStart = new Authorization(
+                                                               Text(payload, "ID") ?? "?",
+                                                               Type:                  Text(payload, "IT") ?? "?",
+                                                               IdentificationStatus:  payload["IS"]?.Type == JTokenType.Boolean
+                                                                                          ? payload["IS"]!.Value<Boolean>()
+                                                                                          : null,
+                                                               IdentificationLevel:   Text(payload, "IL"),
+                                                               IdentificationFlags:   TextArray(payload, "IF")
+                                                           )
                                   };
 
             var record = new ChargeTransparencyRecord(
@@ -585,6 +593,30 @@ namespace cloud.charging.open.chargy.Formats.OCMF
 
             => JSON[Key]?.Type == JTokenType.String
                    ? JSON[Key]!.Value<String>()
+                   : null;
+
+        #endregion
+
+        #region (private, static) TextArray (JSON, Key)
+
+        /// <summary>
+        /// An array of strings, or null when it is absent or not one.
+        ///
+        /// Note that null and an empty array are different answers here: the OCMF
+        /// specification makes the identification flags mandatory, several vendors
+        /// omit them anyway, and an empty list is what a reader is supposed to see
+        /// in that case. Which is a rule about presentation, not about evidence —
+        /// a meter that said nothing about how the driver identified themselves
+        /// has not thereby said that they identified themselves in no way.
+        /// </summary>
+        /// <param name="JSON">A JSON object.</param>
+        /// <param name="Key">The name of a property.</param>
+        private static IEnumerable<String>? TextArray(JObject  JSON,
+                                                      String   Key)
+
+            => JSON[Key] is JArray array
+                   ? array.Where (element => element.Type == JTokenType.String).
+                           Select(element => element.Value<String>()!)
                    : null;
 
         #endregion

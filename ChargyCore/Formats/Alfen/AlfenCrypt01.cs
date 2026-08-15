@@ -129,7 +129,10 @@ namespace cloud.charging.open.chargy.Formats.Alfen
             // ISO 8601 timestamp in UTC, and adding an offset here would move the
             // reading by exactly the meter's summer time.
             ChargyLib.SetTimestamp32(buffer, MeasurementValue.Timestamp,                              34, AddMeterOffset: false);
-            ChargyLib.SetHex        (buffer, ChargyLib.OBIS2Hex(measurement.OBIS),                    38);
+            // An Alfen data set always names what it measured. A measurement that
+            // did not would leave these bytes empty and fail its own signature,
+            // which is the right answer: the OBIS code is part of what was signed.
+            ChargyLib.SetHex        (buffer, ChargyLib.OBIS2Hex(measurement.OBIS ?? ""),             38);
             ChargyLib.SetInt8       (buffer, measurement.UnitEncoded ?? 0,                            44);
             ChargyLib.SetInt8       (buffer, measurement.Scale,                                       45);
             ChargyLib.SetUInt64     (buffer, MeasurementValue.Value,                                  46, true);

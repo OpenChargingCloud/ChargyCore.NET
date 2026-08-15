@@ -30,8 +30,15 @@ namespace cloud.charging.open.chargy
     /// readings.
     /// </summary>
     /// <param name="EnergyMeterId">The identification of the energy meter.</param>
-    /// <param name="Name">The name of the measured quantity, e.g. "ENERGY_TOTAL".</param>
-    /// <param name="OBIS">The OBIS number of the measured quantity, e.g. "1-0:1.8.0*255".</param>
+    /// <param name="Name">
+    /// The name of the measured quantity, e.g. "ENERGY_TOTAL".
+    ///
+    /// Absent for the meters that report several quantities under one signature —
+    /// a BSM snapshot signs an energy reading, a total and a power at once, and
+    /// naming the group after any one of them would misdescribe the other two.
+    /// Those name themselves per <see cref="Phenomenon"/> instead.
+    /// </param>
+    /// <param name="OBIS">The OBIS number of the measured quantity, e.g. "1-0:1.8.0*255"; absent for the same reason as the name.</param>
     /// <param name="Scale">The power of ten the measured values are scaled by.</param>
     /// <param name="Values">The signed readings.</param>
     /// <param name="Context">An optional JSON-LD context.</param>
@@ -40,9 +47,10 @@ namespace cloud.charging.open.chargy
     /// <param name="ValueType">An optional value type.</param>
     /// <param name="VerifyChain">Whether the readings form a hash chain that has to be verified as a whole.</param>
     /// <param name="SignatureInfos">Optional information about how the readings are signed.</param>
+    /// <param name="Phenomena">The individual quantities, for the meters that sign several at once.</param>
     public class Measurement(String                          EnergyMeterId,
-                             String                          Name,
-                             String                          OBIS,
+                             String?                         Name,
+                             String?                         OBIS,
                              Int32                           Scale,
                              IEnumerable<MeasurementValue>?  Values          = null,
                              IEnumerable<String>?            Context         = null,
@@ -50,7 +58,8 @@ namespace cloud.charging.open.chargy
                              UInt16?                         UnitEncoded     = null,
                              String?                         ValueType       = null,
                              Boolean?                        VerifyChain     = null,
-                             SignatureInfos?                 SignatureInfos  = null)
+                             SignatureInfos?                 SignatureInfos  = null,
+                             IEnumerable<Phenomenon>?        Phenomena       = null)
     {
 
         #region Data
@@ -65,10 +74,13 @@ namespace cloud.charging.open.chargy
         public String                           EnergyMeterId         { get; }      = EnergyMeterId;
 
         /// <summary>The name of the measured quantity, e.g. "ENERGY_TOTAL".</summary>
-        public String                           Name                  { get; }      = Name;
+        public String?                          Name                  { get; }      = Name;
 
         /// <summary>The OBIS number of the measured quantity, e.g. "1-0:1.8.0*255".</summary>
-        public String                           OBIS                  { get; }      = OBIS;
+        public String?                          OBIS                  { get; }      = OBIS;
+
+        /// <summary>The individual quantities, for the meters that sign several at once.</summary>
+        public IReadOnlyList<Phenomenon>        Phenomena             { get; }      = Phenomena?.ToArray() ?? [];
 
         /// <summary>The power of ten the measured values are scaled by.</summary>
         public Int32                            Scale                 { get; }      = Scale;
@@ -147,12 +159,8 @@ namespace cloud.charging.open.chargy
             var name          = JSON["name"]?.         Value<String>();
             var obis          = JSON["obis"]?.         Value<String>();
 
-            if (energyMeterId is null ||
-                name          is null ||
-                obis          is null)
-            {
+            if (energyMeterId is null)
                 return false;
-            }
 
             SignatureInfos? signatureInfos = null;
 
@@ -170,7 +178,11 @@ namespace cloud.charging.open.chargy
                                   JSON["unitEncoded"]?. Value<UInt16>(),
                                   JSON["valueType"]?.   Value<String>(),
                                   JSON["verifyChain"]?. Value<Boolean>(),
-                                  signatureInfos
+                                  signatureInfos,
+                                  JSON["phenomena"] is JArray phenomenaArray
+                                      ? phenomenaArray.OfType<JObject>().
+                                                       Select(Phenomenon.Parse)
+                                      : null
                               );
 
             if (JSON["values"] is JArray valueArray)
@@ -203,8 +215,15 @@ namespace cloud.charging.open.chargy
                 json.Add(new JProperty("@context",        new JArray(Context)));
 
             json.Add(new JProperty("energyMeterId",       EnergyMeterId));
-            json.Add(new JProperty("name",                Name));
-            json.Add(new JProperty("obis",                OBIS));
+
+            if (Name           is not null)
+                json.Add(new JProperty("name",            Name));
+
+            if (OBIS           is not null)
+                json.Add(new JProperty("obis",            OBIS));
+
+            if (Phenomena.Count > 0)
+                json.Add(new JProperty("phenomena",       new JArray(Phenomena.Select(phenomenon => phenomenon.ToJSON()))));
 
             if (Unit           is not null)
                 json.Add(new JProperty("unit",            Unit));

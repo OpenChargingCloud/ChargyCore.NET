@@ -705,7 +705,7 @@ namespace cloud.charging.open.chargy.IO
 
             try
             {
-                json = JObject.Parse(Text);
+                json = ChargyLib.ParseJSON(Text);
             }
             catch (Exception exception)
             {
@@ -994,7 +994,7 @@ namespace cloud.charging.open.chargy.IO
             {
 
                 var recordText  = System.Text.Encoding.UTF8.GetString(record.Data.Span);
-                var json        = JObject.Parse(recordText);
+                var json        = ChargyLib.ParseJSON(recordText);
 
                 json["original"]   = Convert.ToBase64String(record.Data.Span);
                 json["signature"]  = Convert.ToHexStringLower(signature.Data.Span);

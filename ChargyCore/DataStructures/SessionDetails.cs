@@ -306,13 +306,26 @@ namespace cloud.charging.open.chargy
     /// <param name="ChargingStationOperator">An optional charging station operator.</param>
     /// <param name="RoamingNetwork">An optional roaming network.</param>
     /// <param name="EMobilityProvider">An optional e-mobility provider.</param>
+    /// <param name="IdentificationStatus">Whether the meter considered the driver's identification to be present and complete.</param>
+    /// <param name="IdentificationLevel">How the identification was assured, e.g. verified by a trusted party.</param>
+    /// <param name="IdentificationFlags">
+    /// How the driver identified themselves, e.g. "RFID_PLAIN" or "OCPP_AUTH".
+    ///
+    /// Empty rather than absent when the meter reported none, because that is what
+    /// the OCMF specification asks for — "no flags" is a statement, "no field" is
+    /// a meter that did not answer, and both arrive here as an empty list only
+    /// because the specification says so.
+    /// </param>
     public class Authorization(String                Id,
                                IEnumerable<String>?  Context                  = null,
                                String?               Type                     = null,
                                String?               Timestamp                = null,
                                String?               ChargingStationOperator  = null,
                                String?               RoamingNetwork           = null,
-                               String?               EMobilityProvider        = null)
+                               String?               EMobilityProvider        = null,
+                               Boolean?              IdentificationStatus     = null,
+                               String?               IdentificationLevel      = null,
+                               IEnumerable<String>?  IdentificationFlags      = null)
     {
 
         #region Properties
@@ -337,6 +350,15 @@ namespace cloud.charging.open.chargy
 
         /// <summary>An optional e-mobility provider.</summary>
         public String?                EMobilityProvider          { get; } = EMobilityProvider;
+
+        /// <summary>Whether the meter considered the driver's identification to be present and complete.</summary>
+        public Boolean?               IdentificationStatus       { get; } = IdentificationStatus;
+
+        /// <summary>How the identification was assured.</summary>
+        public String?                IdentificationLevel        { get; } = IdentificationLevel;
+
+        /// <summary>How the driver identified themselves.</summary>
+        public IReadOnlyList<String>  IdentificationFlags        { get; } = IdentificationFlags?.ToArray() ?? [];
 
         #endregion
 
@@ -365,7 +387,14 @@ namespace cloud.charging.open.chargy
                                 JSON["timestamp"]?.              Value<String>(),
                                 JSON["chargingStationOperator"]?.Value<String>(),
                                 JSON["roamingNetwork"]?.         Value<String>(),
-                                JSON["eMobilityProvider"]?.      Value<String>()
+                                JSON["eMobilityProvider"]?.      Value<String>(),
+                                JSON["identificationStatus"]?.   Value<Boolean>(),
+                                JSON["identificationLevel"]?.    Value<String>(),
+                                JSON["identificationFlags"] is JArray flags
+                                    ? flags.Select(flag => flag.Value<String>()).
+                                            Where (flag => flag is not null).
+                                            Cast<String>()
+                                    : null
                             );
 
             return true;
@@ -406,6 +435,15 @@ namespace cloud.charging.open.chargy
 
             if (EMobilityProvider       is not null)
                 json.Add(new JProperty("eMobilityProvider",       EMobilityProvider));
+
+            if (IdentificationStatus.HasValue)
+                json.Add(new JProperty("identificationStatus",    IdentificationStatus.Value));
+
+            if (IdentificationLevel     is not null)
+                json.Add(new JProperty("identificationLevel",     IdentificationLevel));
+
+            if (IdentificationFlags.Count > 0)
+                json.Add(new JProperty("identificationFlags",     new JArray(IdentificationFlags)));
 
             return json;
 

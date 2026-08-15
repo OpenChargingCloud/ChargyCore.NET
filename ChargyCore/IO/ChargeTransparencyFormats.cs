@@ -159,6 +159,15 @@ namespace cloud.charging.open.chargy.IO
         /// <summary>The chargeIT mobility container format.</summary>
         public IJSONChargeTransparencyFormat?  ChargeIT       { get; init; }
 
+        /// <summary>
+        /// The BAUER Electronic BSM-WS36A meter value format.
+        ///
+        /// Like EDL40 this has no detector of its own: BSM snapshots only ever
+        /// arrive inside a chargeIT container, which is what supplies the place
+        /// they were taken at.
+        /// </summary>
+        public Formats.BSM.BSMFormat?          BSM            { get; init; }
+
         /// <summary>The ChargePoint format.</summary>
         public IJSONChargeTransparencyFormat?  ChargePoint    { get; init; }
 
@@ -196,14 +205,17 @@ namespace cloud.charging.open.chargy.IO
             var alfen  = new Formats.Alfen.AlfenFormat(i18n);
             var ocmf   = new Formats.OCMF.OCMFFormat(i18n);
             var edl40  = new Formats.EDL40.EDL40Format(i18n);
+            var bsm    = new Formats.BSM.  BSMFormat  (i18n);
 
             return new () {
-                       Alfen    = alfen,
-                       OCMF     = ocmf,
-                       EDL40    = edl40,
-                       // The SAFE container carries someone else's signed data, so
-                       // it has to know the formats it may be carrying.
-                       SAFEXML  = new Formats.SAFEXML.SAFEXMLContainer(i18n, alfen, ocmf, edl40)
+                       Alfen     = alfen,
+                       OCMF      = ocmf,
+                       EDL40     = edl40,
+                       BSM       = bsm,
+                       // The containers carry someone else's signed data, so they
+                       // have to know the formats they may be carrying.
+                       SAFEXML   = new Formats.SAFEXML. SAFEXMLContainer(i18n, alfen, ocmf, edl40),
+                       ChargeIT  = new Formats.ChargeIT.ChargeITContainer(i18n, alfen, bsm)
                    };
 
         }

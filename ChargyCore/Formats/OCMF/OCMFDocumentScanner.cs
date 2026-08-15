@@ -149,7 +149,7 @@ namespace cloud.charging.open.chargy.Formats.OCMF
 
                             try
                             {
-                                payload = JObject.Parse(rawPayload);
+                                payload = ChargyLib.ParseJSON(rawPayload);
                             }
                             catch (Exception)
                             {
@@ -172,7 +172,7 @@ namespace cloud.charging.open.chargy.Formats.OCMF
 
                             try
                             {
-                                signature = JObject.Parse(combined[blockStart..(blockEnd + 1)]);
+                                signature = ChargyLib.ParseJSON(combined[blockStart..(blockEnd + 1)]);
                             }
                             catch (Exception)
                             {

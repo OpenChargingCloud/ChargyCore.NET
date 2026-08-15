@@ -139,7 +139,7 @@ namespace cloud.charging.open.chargy.IO
                 try
                 {
                     if (response.HTTPBodyAsUTF8String is String body && body.Length > 0)
-                        serviceData = JObject.Parse(body);
+                        serviceData = ChargyLib.ParseJSON(body);
                 }
                 catch (Exception)
                 {
