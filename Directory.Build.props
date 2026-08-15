@@ -1,0 +1,50 @@
+<Project>
+
+  <!--
+    Copyright (c) 2018-2026 GraphDefined GmbH <achim.friedland@graphdefined.com>
+    This file is part of ChargyCore <https://github.com/OpenChargingCloud/ChargyCore.NET>
+
+    Settings shared by every project in this repository.
+
+    Styx and Hermod are referenced from sibling directories and therefore keep
+    their own settings — this file reaches only what lives below it.
+  -->
+
+  <PropertyGroup Label="Language and platform">
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <LangVersion>latest</LangVersion>
+    <!-- Every public member is documented, and the compiler is what enforces
+         that: with the documentation file switched on, an undocumented public
+         member is a warning, and the build runs warning-free. -->
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+  </PropertyGroup>
+
+  <PropertyGroup Label="Reproducibility">
+    <Deterministic>true</Deterministic>
+    <!-- A stable path map, so that two builds of the same commit produce the
+         same assembly regardless of where the repository was cloned. -->
+    <ContinuousIntegrationBuild Condition="'$(GITHUB_ACTIONS)' == 'true'">true</ContinuousIntegrationBuild>
+  </PropertyGroup>
+
+  <PropertyGroup Label="Package metadata">
+    <Authors>GraphDefined GmbH</Authors>
+    <Company>GraphDefined GmbH</Company>
+    <Copyright>Copyright (c) 2018-2026 GraphDefined GmbH</Copyright>
+    <PackageLicenseExpression>AGPL-3.0-only</PackageLicenseExpression>
+    <PackageProjectUrl>https://github.com/OpenChargingCloud/ChargyCore.NET</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/OpenChargingCloud/ChargyCore.NET</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageTags>eichrecht;charge-transparency;e-mobility;ocmf;transparenzsoftware;ev-charging;calibration-law</PackageTags>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <!-- Debug symbols travel with the package: verifying somebody's charging
+         session is exactly the situation in which a stack trace has to be
+         readable. -->
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+    <!-- Nothing is packable unless it says so. -->
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+</Project>

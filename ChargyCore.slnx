@@ -3,5 +3,6 @@
   <Project Path="../Styx/Styx/Styx.csproj" />
   <Project Path="ChargyCore/ChargyCore.csproj" />
   <Project Path="ChargyCore.QRCodes/ChargyCore.QRCodes.csproj" />
+  <Project Path="ChargyVerify/ChargyVerify.csproj" />
   <Project Path="ChargyCoreTests/ChargyCoreTests.csproj" />
 </Solution>

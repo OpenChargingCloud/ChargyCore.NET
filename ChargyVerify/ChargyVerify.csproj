@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>cloud.charging.open.chargy.cli</RootNamespace>
+    <AssemblyName>chargy-verify</AssemblyName>
+    <Product>Chargy Verify</Product>
+    <Description>Verifies charge transparency files from the command line. A worked example of the ChargyCore API rather than a product.</Description>
+    <!-- A sample, not something to install from a package feed. -->
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\ChargyCore\ChargyCore.csproj" />
+    <!-- So that a photograph of the QR code on a charging station works too.
+         A server-side consumer who never sees one can leave this out. -->
+    <ProjectReference Include="..\ChargyCore.QRCodes\ChargyCore.QRCodes.csproj" />
+  </ItemGroup>
+
+</Project>

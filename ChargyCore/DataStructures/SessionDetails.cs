@@ -316,6 +316,11 @@ namespace cloud.charging.open.chargy
     /// a meter that did not answer, and both arrive here as an empty list only
     /// because the specification says so.
     /// </param>
+    /// <param name="IdentificationStatusText">
+    /// The meter's own word for the identification state, where it wrote one
+    /// instead of a yes or a no — OCMF 0.1 wrote "VERIFIED" where 1.x writes a
+    /// boolean.
+    /// </param>
     public class Authorization(String                Id,
                                IEnumerable<String>?  Context                  = null,
                                String?               Type                     = null,

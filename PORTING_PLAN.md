@@ -48,6 +48,8 @@ These exist only because ChargyCore.TS is consumed by a browser/Electron GUI:
 ```
 ChargyCore.NET/
 ├── ChargyCore.slnx
+├── Directory.Build.props               settings and package metadata, shared
+├── Directory.Build.targets             the packed README (needs IsPackable, so: targets)
 ├── LICENSE                             AGPL-3.0 (copied from ChargyCore.TS)
 ├── README.md  SECURITY.md  CONTRIBUTING.md  CODE_OF_CONDUCT.md
 ├── .gitignore  .gitattributes
@@ -129,6 +131,12 @@ ChargyCore.NET/
 │   │
 │   ├── OCPI/                           OCPI tariff helpers (OCPI.ts)
 │   └── Resources/                      i18n.json, validationRules.json (EmbeddedResource)
+│
+├── ChargyVerify/                       command line verifier, a worked example
+│   ├── ChargyVerify.csproj
+│   ├── Program.cs                      read the files, hand them to the detector
+│   ├── CommandLine.cs
+│   └── Report.cs                       ..., and print what came back
 │
 └── ChargyCoreTests/                    (naming follows HermodTests / StyxTests)
     ├── ChargyCoreTests.csproj
@@ -416,7 +424,7 @@ data formats plugged in through `ChargeTransparencyFormats`.
 `secrrct` combination, nested archives, the SAFE PDF/A-3 invoice, the PNG/JPEG/SVG QR
 codes, and the public key file handling end to end.
 
-### Phase 4 — Formats, one directory at a time 🚧 next
+### Phase 4 — Formats, one directory at a time ✅ **done**
 Ordered so each step unlocks the largest number of golden tests with the least new
 infrastructure. Every step is a self-contained increment: format + its `ACrypt` + its tests.
 
@@ -684,10 +692,51 @@ client is also the first part of Chargy that would open a network connection on 
 driver's behalf, which deserves to be decided deliberately rather than inherited from
 a to-do list.
 
-### Phase 6 — Polish & release ⬜
-XML documentation comments on the whole public surface, `README.md` with usage examples,
-a small sample/CLI project for verifying a file from the command line, `Directory.Build.props`
-with the shared package metadata, optional NuGet packaging.
+### Phase 6 — Polish & release ✅ **done**
+
+**Documentation comments** were never a separate task in the end: `GenerateDocumentationFile`
+has been on since Phase 0, so an undocumented public member has been a build warning
+throughout and the build has run warning-free throughout. The one gap this phase found
+was a `<param>` tag missing from `Authorization` after Phase 5 added a parameter to it —
+which is exactly the kind of thing a compiler should be catching rather than a reviewer.
+
+**`Directory.Build.props`** now holds what the two library projects had been repeating:
+the target framework and language settings, the package metadata, deterministic builds,
+symbol packages and the packed README. `IsPackable` defaults to **false** there and is
+turned on per project, so a new project has to say that it wants to be published rather
+than discover that it already is.
+
+**`ChargyVerify`** is a command line verifier and a worked example of the API in one:
+read the files, hand them to the detector, print what came back. It is deliberately thin
+— every interesting decision belongs in the library, and an application should not have
+to know that an OCMF string, a ZIP of chargeIT containers and a photograph of a QR code
+are three different problems. It exits `0` when everything read verified, `1` when
+something did not, `2` when the input was not charge transparency data at all and `64` on
+a command line it could not parse, so it is usable from a script as well as readable by a
+person. Numbers are printed culture-invariantly: a reading written as `50,387945` on one
+machine and `50.387945` on the next cannot be compared, pasted into a bug report or piped
+into anything.
+
+**The README** gained a usage section, the command line section, and corrected status
+tables — they still claimed Phase 4 was in progress and OCMF was next.
+
+**Packaging** works and is exercised by CI on every commit, but the packages are
+**not publishable yet**, for a reason worth stating plainly:
+
+| Dependency | State on nuget.org |
+|---|---|
+| Hermod | No package at all. |
+| Styx | The id `Styx` belongs to an unrelated project — a websocket framework by ReactiveMarkets, versions 0.9.x. |
+
+A package depending on assemblies nobody can download is a package nobody can install,
+and the second row is the worse of the two: publishing as it stands would emit a
+dependency on `Styx 1.0.0`, and the id it names is somebody else's. Styx would have to be
+published under a distinct id such as `org.GraphDefined.Vanaheimr.Styx`. Until both are
+settled, ChargyCore.NET is consumed as a project reference, exactly as its own CI does.
+CI packs anyway, so that a broken package description is found on the commit that broke
+it rather than on release day — and packs the two library projects individually rather
+than the solution, because Styx and Hermod are in the solution too and packing them here
+would publish other people's projects out of this build.
 
 ---
 

@@ -1,0 +1,18 @@
+<Project>
+
+  <!--
+    Copyright (c) 2018-2026 GraphDefined GmbH <achim.friedland@graphdefined.com>
+    This file is part of ChargyCore <https://github.com/OpenChargingCloud/ChargyCore.NET>
+
+    Imported after each project has had its say, which is why the packable
+    projects can be recognised here and not in Directory.Build.props.
+  -->
+
+  <ItemGroup Condition="'$(IsPackable)' == 'true'">
+    <!-- The repository README is the package README: a NuGet page that says
+         something different from the project page would be a second document to
+         keep true. -->
+    <None Include="$(MSBuildThisFileDirectory)README.md" Pack="true" PackagePath="\" Visible="false" />
+  </ItemGroup>
+
+</Project>

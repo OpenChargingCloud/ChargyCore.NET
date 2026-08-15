@@ -1,13 +1,11 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net10.0</TargetFramework>
-    <ImplicitUsings>enable</ImplicitUsings>
-    <Nullable>enable</Nullable>
-    <LangVersion>latest</LangVersion>
     <RootNamespace>cloud.charging.open.chargy.tests</RootNamespace>
     <AssemblyName>cloud.charging.open.chargy.tests</AssemblyName>
-    <IsPackable>false</IsPackable>
+    <!-- Test names say what they mean; an XML comment on every one of them would
+         be a second place to keep the same sentence true. -->
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
   </PropertyGroup>
 
   <ItemGroup>

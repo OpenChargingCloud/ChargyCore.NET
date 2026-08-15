@@ -61,10 +61,130 @@ Supported representations include:
 This allows applications to pass transparency data to ChargyCore in the form in which it was originally received, without having to manually unpack, decode, or normalize every file beforehand.
 
 
+## Usage
+
+Everything starts at `ContentFormatDetector`. Hand it the files as they arrived —
+whatever they are — and it works out the rest: PDF attachments out, archives
+unpacked (repeatedly, because they nest), QR codes read, public keys paired with the
+records they belong to, and each remaining file given to the format it looks like.
+
+```csharp
+using cloud.charging.open.chargy;
+using cloud.charging.open.chargy.IO;
+using cloud.charging.open.chargy.qrcodes;
+
+var i18n     = I18NDictionary.Default();
+
+var detector = new ContentFormatDetector(
+                   i18n,
+                   ChargeTransparencyFormats.All(i18n),
+                   new PDFAttachmentExtractor(),   // optional: PDF/A-3 invoices
+                   new QRCodeDecoder()             // optional: photographed QR codes
+               );
+
+var result   = await detector.DetectAndConvertContentFormat([
+                   new FileInfo("OCMF-Testdata-01.ocmf",
+                                await File.ReadAllBytesAsync("OCMF-Testdata-01.ocmf")),
+                   new FileInfo("OCMF-Testdata-01_publicKey.txt",
+                                await File.ReadAllBytesAsync("OCMF-Testdata-01_publicKey.txt"))
+               ]);
+```
+
+The file **name** is handed over alongside the bytes on purpose: a public key file is
+paired with its record by name, and some formats are recognised by theirs.
+
+What comes back is one of a handful of things, and which one is itself information —
+a QR code that turns out to hold a link is a different answer from a charging session
+that failed to verify:
+
+```csharp
+switch (result)
+{
+
+    case ChargeTransparencyRecord record:
+        foreach (var session in record.ChargingSessions)
+            Console.WriteLine($"{session.Id}: {session.VerificationResult?.Status}");
+        break;
+
+    // A pointer to charging data, not the data itself. Nothing was fetched:
+    // following the link would tell the operator who is looking.
+    case SimpleURL url:
+        Console.WriteLine(url.URL);
+        break;
+
+    case ChargeTransparencyLiveLink liveLink:
+        Console.WriteLine($"{liveLink.Transports.Count} way(s) to reach the station");
+        break;
+
+    case PublicKeyLookup keys:
+        Console.WriteLine($"{keys.PublicKeys.Count} public key(s) and no charging data");
+        break;
+
+    // Not charge transparency data at all — and this says why, in the
+    // languages the dictionary was built with.
+    case SessionCryptoResult failure:
+        Console.WriteLine(i18n.GetLocalizedText(failure.Message));
+        break;
+
+}
+```
+
+A signature that verifies says the meter really reported these numbers. What the
+numbers **are** is the other half:
+
+```csharp
+foreach (var measurement in record.ChargingSessions[0].Measurements)
+    foreach (var value in measurement.Values)
+        Console.WriteLine($"{value.Timestamp}  {value.Value} {measurement.Unit}  " +
+                          $"{value.Result?.Status}");
+```
+
+Each reading carries its own verdict, and where a verification failed it carries the
+reason as well — a stable `Code` an application can switch on, the sentence to show a
+driver in their own language, and a technical detail where there is one. That
+distinction matters: "the signature does not match the signed data" says something
+about the charging session, while "this curve is not implemented" says something about
+Chargy.
+
+When the format is already known and the file has already been unpacked, a format can
+be used on its own:
+
+```csharp
+var record = new OCMFFormat(i18n).TryParseText(ocmfDocument, publicKeyHEX);
+```
+
+
+## Command line
+
+`ChargyVerify` is a small worked example of the API — read the files, hand them to the
+detector, print what came back:
+
+```bash
+dotnet run --project ChargyVerify -- <file>...
+```
+
+```
+Charging session 1: verified
+  identification:   1546961267168:463645022654661183:1
+  measured:         2019-01-08T15:27:50.000Z .. 2019-01-08T15:50:02.000Z
+  EVSE:             DE*BDO*74778874*1
+  energy meter:     0901454D4800007F9F3E
+  authorized by:    235DD5BB
+  ENERGY_TOTAL: 2 reading(s), 2 with a valid signature
+    6484 WATT_HOUR (110281 .. 116765)
+```
+
+It exits `0` when everything read verified, `1` when something did not, `2` when the
+input was not charge transparency data at all and `64` when the command line made no
+sense — so it can be used from a script as well as read by a person. `--help` lists
+the options; `--json` prints the charge transparency record itself instead of a
+report.
+
+
 ## Project Status
 
-ChargyCore.NET is currently being ported from ChargyCore.TS.
-The porting strategy, the solution layout and the phase plan are documented in
+ChargyCore.NET has been ported from ChargyCore.TS. The porting strategy, the phase
+plan and every deliberate deviation are documented in
 [`PORTING_PLAN.md`](PORTING_PLAN.md).
 
 | Phase | Scope | Status |
@@ -73,35 +193,32 @@ The porting strategy, the solution layout and the phase plan are documented in
 | 1 | ChargyLib, data structures, i18n, validation rules | ✅ **done** |
 | 2 | Cryptography (ECDSA, EdDSA, ML-DSA), ACrypt, signed JSON | ✅ **done** |
 | 3 | Content format detection, archives, PDF/A-3, QR codes | ✅ **done** |
-| 4 | The charge transparency data formats | 🚧 in progress |
-| 5 | Charge Transparency Live Link, URL resolution | ⬜ planned |
-| 6 | Documentation, samples, packaging | ⬜ planned |
+| 4 | The charge transparency data formats | ✅ **done** |
+| 5 | Charge Transparency Live Link, URL resolution | ✅ **done** |
+| 6 | Documentation, samples, packaging | ✅ **done** |
 
 Phase 4 in detail:
 
 | Format | Status |
 |---|---|
-| SAFE XML container | ✅ **done** (Alfen payloads; OCMF and EDL40 with their own steps) |
+| SAFE XML container | ✅ **done** |
 | Alfen | ✅ **done** |
-| OCMF | ⬜ next |
-| EMH, EDL40 | ⬜ planned |
-| chargeIT, BSM, GDF | ⬜ planned |
-| Mennekes, ChargePoint, PCDF | ⬜ planned |
-| PTB, XMLContainer, KEBA, QIDigital, OCPI | ⬜ planned |
+| OCMF, incl. the BET tariff text extension and the modern signatures | ✅ **done** |
+| EMH, EDL40 (SML) | ✅ **done** |
+| chargeIT, BSM, GDF | ✅ **done** |
+| Mennekes, ChargePoint, PCDF | ✅ **done** |
+| PTB, XMLContainer, KEBA | ✅ **done** |
+| QIDigital (DCC / DCoA / DCoC), OCPI | ✅ **done** |
 
-Phase 3 in detail:
+The verification reports of all 23 shared golden files match ChargyCore.TS
+byte-for-byte. Two formats are worth naming explicitly: **GDF** is ported and
+exercised by no fixture in either implementation, and **QIDigital** is a data model
+only — upstream declares 34 TypeScript interfaces and no parser, so the round trip is
+the only claim available without a real calibration certificate.
 
-| Component | Status |
-|---|---|
-| `ContentTypes` — magic-byte sniffing, MIME normalization | ✅ **done** |
-| `ArchiveReader` — ZIP, TAR, GZip, BZip2, including nested archives | ✅ **done** |
-| ChargePoint `secrrct` + `secrrct.sign` combination | ✅ **done** |
-| `PDFAttachmentExtractor` — PDF/A-3 attachments, reading the PDF itself via Styx | ✅ **done** |
-| `QRCodeDecoder` — PNG, JPEG, GIF, WEBP, BMP and SVG | ✅ **done** |
-| `PublicKeyFiles` — pairing a key file with the record it belongs to | ✅ **done** |
-| `IURLResolver` / `HTTPURLResolver` — over Hermod, opt-in, off by default | ✅ **done** |
-| `ContentFormatDetector` — the whole detection pipeline | ✅ **done** |
-| `ChargeTransparencyFormats` — the registry Phase 4 fills in | ✅ **done** |
+Not ported, because there is nothing to port: ChargyCore.TS **declares** the three
+live-link transports (`https`, `httpSSE`, `websocket`) and a TOTP configuration, and
+implements neither. Both are carried faithfully as data.
 
 
 ## Related projects
@@ -118,6 +235,7 @@ Phase 3 in detail:
 ChargyCore.slnx
 ├── ChargyCore/            The library, assembly "cloud.charging.open.chargy"
 ├── ChargyCore.QRCodes/    QR code reading, assembly "cloud.charging.open.chargy.qrcodes"
+├── ChargyVerify/          Command line verifier, a worked example of the API
 └── ChargyCoreTests/       NUnit test project incl. all charge transparency test fixtures
 ```
 
@@ -161,10 +279,36 @@ dotnet build ChargyCore.slnx
 dotnet test ChargyCore.slnx
 ```
 
+```bash
+dotnet run --project ChargyVerify -- --help
+```
+
+The build settings and the package metadata shared by every project live in
+[`Directory.Build.props`](Directory.Build.props). `GenerateDocumentationFile` is on, so
+an undocumented public member is a warning, and the build runs warning-free.
+
 All cryptography is provided by [BouncyCastle](https://www.bouncycastle.org/) — ECDSA over
 secp192r1, secp224k1, secp256k1, secp256r1, secp384r1 and secp521r1; Ed25519, Ed25519ctx,
 Ed25519ph, Ed448 and Ed448ph; and the FIPS 204 parameter sets ML-DSA-44, ML-DSA-65 and
 ML-DSA-87.
+
+
+### Packaging
+
+`dotnet pack` on the two library projects produces `cloud.charging.open.chargy` and
+`cloud.charging.open.chargy.qrcodes`, each with the XML documentation, this README and
+a `.snupkg` of debug symbols, and CI builds them on every commit so that a broken
+package description is found here rather than on release day. Project by project
+rather than solution-wide, because Styx and Hermod are in the solution as well and
+packing them here would publish other people's projects out of this build.
+
+They are **not published to nuget.org yet**, and cannot be until Styx and Hermod are:
+a package that depends on assemblies nobody can download is a package nobody can
+install. Two things have to be settled first — Hermod has no package on nuget.org at
+all, and the id `Styx` there belongs to an unrelated project, so Styx would have to be
+published under a distinct id such as `org.GraphDefined.Vanaheimr.Styx`. Until then,
+consume ChargyCore.NET as a project reference, exactly as this repository's own CI
+does.
 
 
 ### Verification report parity
