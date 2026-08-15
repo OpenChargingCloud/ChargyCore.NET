@@ -237,7 +237,8 @@ namespace cloud.charging.open.chargy.Crypto
 
             var fileName = FileName.ToLowerInvariant();
 
-            if (!fileName.Contains("publickey", StringComparison.Ordinal) &&
+            if (!fileName.Contains("publickey",  StringComparison.Ordinal) &&
+                !fileName.Contains("public-key", StringComparison.Ordinal) &&
                 !fileName.Contains("public_key", StringComparison.Ordinal))
             {
                 return false;

@@ -388,14 +388,17 @@ loading, validation rules.
 `Illias.CanonicalJSON`, `ACrypt` base class, `VerificationTrace`.
 *Exit:* `CryptoUtilsTests`, `CanonicalJSONTests`, `PublicKeyFilesTests` green (~24 cases).
 
-### Phase 3 — I/O & container pipeline 🚧 next
-`ContentFormatDetector` (the `DetectAndConvertContentFormat` state machine), archive
-readers (zip/tar/gz/bz2), `IPDFAttachmentExtractor`, `IQRCodeDecoder`, XML/JSON format
-dispatch, `SimpleURL`, `ChargeTransparencyLiveLink`.
-*Exit:* `SimpleURLsTests`, `ChargeTransparencyLiveLinkTests` green; archives/PDF/QR
-extraction proven against binary fixtures (~15 cases).
+### Phase 3 — I/O & container pipeline ✅ **done**
+`ContentTypes` (magic-byte sniffing), `ArchiveReader` (zip/tar/gz/bz2),
+`PDFAttachmentExtractor` behind `IPDFAttachmentExtractor`, `QRCodeDecoder` behind
+`IQRCodeDecoder`, `PublicKeyFiles`, `HTTPURLResolver` behind `IURLResolver`, and
+`ContentFormatDetector` — the `DetectAndConvertContentFormat` state machine, with the
+data formats plugged in through `ChargeTransparencyFormats`.
+*Exit:* 86 cases green — the five chargeIT container variants, the ChargePoint
+`secrrct` combination, nested archives, the SAFE PDF/A-3 invoice, the PNG/JPEG/SVG QR
+codes, and the public key file handling end to end.
 
-### Phase 4 — Formats, one directory at a time ⬜
+### Phase 4 — Formats, one directory at a time 🚧 next
 Ordered so each step unlocks the largest number of golden tests with the least new
 infrastructure. Every step is a self-contained increment: format + its `ACrypt` + its tests.
 
@@ -570,8 +573,18 @@ message — the latter only with test vectors to prove it matches.
 | 3 | Test project name | **`ChargyCoreTests`** — matching `HermodTests` / `StyxTests` |
 | 4 | QR code decoding & PDF/A-3 extraction | **In the core library, behind `IQRCodeDecoder` / `IPDFAttachmentExtractor`** with default implementations registered by `Chargy` — same out-of-the-box behaviour as ChargyCore.TS, still swappable |
 | 5 | Measurement value type | **`System.Decimal`** — 28–29 significant digits, and full control over formatting, which matters because the values are printed raw into the golden reports |
+| 6 | QR code decoding lives where? | **Revised in Phase 3.** Decision 4 put the default implementations in the core library. The PDF reader is there, and needs no dependency at all. The QR decoder is not: it pulls SkiaSharp with its native binaries, plus Svg.Skia and ZXing.Net. It therefore moved into **`ChargyCore.QRCodes`**, behind `IQRCodeDecoder`. This is closer to ChargyCore.TS than the original decision was — there the `canvas` / `pngjs` / `jpeg-js` modules are *optional* dependencies loaded at runtime, and QR reading degrades gracefully when they are absent. Without a decoder Chargy passes QR images through untouched, exactly as the TypeScript does |
+| 7 | PDF/A-3 reading: hand-rolled or `PdfPig`? | **Hand-rolled**, as decision 4 preferred. Rather than parse cross-reference tables, `PDFDocument` scans the file for `N G obj` definitions directly. That treats classic tables, cross-reference streams, incremental updates and *damaged* tables all the same way — and a charge transparency record is far too important to lose to a table some invoice generator got wrong. Object streams, `FlateDecode`, `ASCIIHexDecode`, `ASCII85Decode` and the PNG predictors are supported; encrypted PDFs yield nothing |
 
 ### Still to settle (not blocking)
+
+* **Hermod is referenced but not yet used.** Phase 3's `HTTPURLResolver` is a ~60 line
+  one-shot GET, and Hermod's `HTTPSClient` is built around a known `IPAddress` and
+  `TCPPort` for long-lived connections — using it here would mean resolving DNS and
+  splitting URLs by hand for no gain. `System.Net.Http.HttpClient` does the job, and
+  `IURLResolver` keeps the choice swappable. Hermod earns its place in **Phase 5**, where
+  the live link needs WebSockets, server-sent events and TOTP-secured endpoints — and
+  `ChargeTransparencyLiveLink` already models a `TOTPConfig` that Hermod implements.
 
 * **Existing prior art** — `VanaheimrElectric/libs/WWCP_OCPP/WWCP_OCPP_Common/Chargy/`
   holds a small (~700 LOC) partial Chargy port (`ChargyLib`, `ACrypt`, `EMHCrypt01`,

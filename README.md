@@ -72,29 +72,24 @@ The porting strategy, the solution layout and the phase plan are documented in
 | 0 | Repository, solution, projects, test fixtures | ✅ **done** |
 | 1 | ChargyLib, data structures, i18n, validation rules | ✅ **done** |
 | 2 | Cryptography (ECDSA, EdDSA, ML-DSA), ACrypt, signed JSON | ✅ **done** |
-| 3 | Content format detection, archives, PDF/A-3, QR codes | 🚧 next |
-| 4 | The charge transparency data formats | ⬜ planned |
+| 3 | Content format detection, archives, PDF/A-3, QR codes | ✅ **done** |
+| 4 | The charge transparency data formats | 🚧 next |
 | 5 | Charge Transparency Live Link, URL resolution | ⬜ planned |
 | 6 | Documentation, samples, packaging | ⬜ planned |
 
-Phase 1 in detail:
+Phase 3 in detail:
 
 | Component | Status |
 |---|---|
-| `ChargyLib` — hex, OBIS, timestamps, signature buffer writers | ✅ **done** |
-| Verification results, severity levels, `Warning`, `Error`, `CryptoResult` | ✅ **done** |
-| `I18NDictionary` — 286 messages, language fallback | ✅ **done** |
-| `ValidationRules` — plausibility rules | ✅ **done** |
-| `ChargeTransparencyRecord`, `ChargingSession`, `Measurement`, `MeasurementValue` | ✅ **done** |
-| `Signature`, `SignatureInfos`, `PublicKey`, `PublicKeySignature`, `OIDInfo` | ✅ **done** |
-| `Address`, contacts, device info, legal compliance | ✅ **done** |
-| `EnergyMeter`, `EVSE`, `ChargingStation`, `ChargingPool`, `ChargingStationOperator` | ✅ **done** |
-| `ChargingTariff`, `ParkingTariff` and the OCPI tariff elements | ✅ **done** |
-| Costs, authorization, parking, legally relevant log messages | ✅ **done** |
-| `SimpleURL`, `ChargeTransparencyLiveLink`, `FileInfo` | ✅ **done** |
-| Resolved object references in `ChargingSession` | ✅ **done** |
-| `EMobilityProvider`, `Contract`, and the full record collections | ✅ **done** |
-| The ported `data-structures` / `chargyInterfaces` / `Timestamps` test cases | ✅ **done** |
+| `ContentTypes` — magic-byte sniffing, MIME normalization | ✅ **done** |
+| `ArchiveReader` — ZIP, TAR, GZip, BZip2, including nested archives | ✅ **done** |
+| ChargePoint `secrrct` + `secrrct.sign` combination | ✅ **done** |
+| `PDFAttachmentExtractor` — the PDF/A-3 `/EmbeddedFiles` name tree | ✅ **done** |
+| `QRCodeDecoder` — PNG, JPEG, GIF, WEBP, BMP and SVG | ✅ **done** |
+| `PublicKeyFiles` — pairing a key file with the record it belongs to | ✅ **done** |
+| `IURLResolver` / `HTTPURLResolver` — opt-in, off by default | ✅ **done** |
+| `ContentFormatDetector` — the whole detection pipeline | ✅ **done** |
+| `ChargeTransparencyFormats` — the registry Phase 4 fills in | ✅ **done** |
 
 
 ## Related projects
@@ -110,8 +105,15 @@ Phase 1 in detail:
 ```
 ChargyCore.slnx
 ├── ChargyCore/            The library, assembly "cloud.charging.open.chargy"
+├── ChargyCore.QRCodes/    QR code reading, assembly "cloud.charging.open.chargy.qrcodes"
 └── ChargyCoreTests/       NUnit test project incl. all charge transparency test fixtures
 ```
+
+Reading a QR code means decoding PNG, JPEG, GIF, WEBP, BMP and SVG, which is by far the
+heaviest dependency in this project. It therefore lives in its own assembly behind
+`IQRCodeDecoder`, so that a consumer who only ever verifies OCMF strings on a server does
+not have to carry an image stack. This mirrors ChargyCore.TS, where the image modules are
+optional dependencies and QR code reading simply degrades when they are absent.
 
 ChargyCore.NET references [Vanaheimr Styx](https://github.com/Vanaheimr/Styx) and
 [Vanaheimr Hermod](https://github.com/Vanaheimr/Hermod) as sibling directories, exactly

@@ -31,6 +31,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\ChargyCore\ChargyCore.csproj" />
+    <ProjectReference Include="..\ChargyCore.QRCodes\ChargyCore.QRCodes.csproj" />
   </ItemGroup>
 
 </Project>

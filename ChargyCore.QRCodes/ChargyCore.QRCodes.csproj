@@ -1,0 +1,35 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <LangVersion>latest</LangVersion>
+    <RootNamespace>cloud.charging.open.chargy.qrcodes</RootNamespace>
+    <AssemblyName>cloud.charging.open.chargy.qrcodes</AssemblyName>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <Product>Chargy Core QR Codes</Product>
+    <Description>Reads charge transparency data from QR code images (PNG, JPEG, GIF, WEBP, BMP and SVG) for ChargyCore. Kept apart from the core library so that consumers who never see QR codes do not have to carry an image decoding stack.</Description>
+    <Authors>GraphDefined GmbH</Authors>
+    <Company>GraphDefined GmbH</Company>
+    <Copyright>Copyright (c) 2018-2026 GraphDefined GmbH</Copyright>
+    <PackageLicenseExpression>AGPL-3.0-only</PackageLicenseExpression>
+    <PackageProjectUrl>https://github.com/OpenChargingCloud/ChargyCore.NET</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/OpenChargingCloud/ChargyCore.NET</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="ZXing.Net" Version="0.16.11" />
+    <PackageReference Include="SkiaSharp" Version="4.151.1" />
+    <PackageReference Include="Svg.Skia" Version="5.2.1" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\ChargyCore\ChargyCore.csproj" />
+  </ItemGroup>
+
+</Project>
