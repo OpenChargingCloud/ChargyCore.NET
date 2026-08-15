@@ -19,6 +19,8 @@
 
 using System.Globalization;
 
+using Org.BouncyCastle.Asn1;
+
 #endregion
 
 namespace cloud.charging.open.chargy.Crypto
@@ -346,6 +348,50 @@ namespace cloud.charging.open.chargy.Crypto
             s.CopyTo(signature, ScalarLength + ScalarLength - s.Length);
 
             return signature;
+
+        }
+
+        #endregion
+
+        #region (static) TryDecodeDERSignature(Signature)
+
+        /// <summary>
+        /// Take the two integers apart that a DER encoded ECDSA signature holds.
+        ///
+        /// Several data formats carry the DER blob but show an EV driver the r
+        /// and s separately, so both forms are needed. The values are returned
+        /// without a sign byte and without leading zeroes, which is how every
+        /// charge transparency format writes them.
+        /// </summary>
+        /// <param name="Signature">A DER encoded ECDSA signature.</param>
+        public static (String R, String S)? TryDecodeDERSignature(ReadOnlySpan<Byte> Signature)
+        {
+
+            try
+            {
+
+                if (Asn1Object.FromByteArray(Signature.ToArray()) is not Asn1Sequence sequence ||
+                    sequence.Count != 2)
+                {
+                    return null;
+                }
+
+                var r = DerInteger.GetInstance(sequence[0]).PositiveValue;
+                var s = DerInteger.GetInstance(sequence[1]).PositiveValue;
+
+                if (r.SignValue <= 0 || s.SignValue <= 0)
+                    return null;
+
+                return (
+                           r.ToString(16),
+                           s.ToString(16)
+                       );
+
+            }
+            catch (Exception)
+            {
+                return null;
+            }
 
         }
 
