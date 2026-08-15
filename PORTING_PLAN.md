@@ -103,7 +103,7 @@ ChargyCore.NET/
 │   │   ├── Mennekes/     MennekesFormat.cs, MennekesCrypt01.cs,
 │   │   │                 MennekesChargingProcess.cs, MennekesMeasurement.cs
 │   │   ├── ChargePoint/  ChargePointFormat.cs, ChargePointCrypt01.cs
-│   │   ├── PCDF/         PCDF.cs, PCDFCrypt01.cs
+│   │   ├── PCDF/         PCDFFormat.cs, PCDFCrypt01.cs, PCDFDocument.cs
 │   │   └── QIDigital/    DCC.cs, DCoA.cs, DCoC.cs
 │   │
 │   ├── Containers/                     data *representations* (not formats)
@@ -490,7 +490,22 @@ infrastructure. Every step is a self-contained increment: format + its `ACrypt` 
    records a parking period is stated per case, because the ones billed purely by
    time or energy do not, and a test that expected parking everywhere would have to
    be weakened until it checked nothing.
-7. **PCDF** → `PCDFTests` (16)
+7. **PCDF** ✅ **done** → `PCDFTests` (17).
+   A whole charging session on one line: fourteen parenthesised fields, the last of
+   which signs the thirteen before it. What is signed is the document's **text** up
+   to the signature — not a reassembled buffer — which makes verification unusually
+   direct and leaves nothing in the layout to get subtly wrong. The layout *is* the
+   document.
+   What can go wrong instead is everything the fields claim, and those faults arrive
+   in groups: a meter that lost its clock reports several impossible things at once.
+   So they are collected and reported together rather than one at a time.
+   Unlike every meter format, PCDF needs no second reading — it states the energy
+   delivered during the session directly rather than as the difference between two
+   meter states, so one reading is the whole answer.
+   The document carries its own public key. That is not circular, but it does mean a
+   key handed over alongside is a second opinion rather than a missing piece: when
+   the two disagree the reading stops, because there is no honest way to choose
+   between them.
 8. **PTB container + XMLContainer + KEBA** → (3)
 9. **QIDigital DCC/DCoA/DCoC + OCPI** → `OCPITests`
 

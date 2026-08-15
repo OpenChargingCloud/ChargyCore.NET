@@ -216,6 +216,7 @@ namespace cloud.charging.open.chargy.IO
                        // have to know the formats they may be carrying.
                        Mennekes     = new Formats.Mennekes.   MennekesFormat   (i18n),
                        ChargePoint  = new Formats.ChargePoint.ChargePointFormat(i18n),
+                       PCDF         = new Formats.PCDF.       PCDFFormat       (i18n),
                        SAFEXML   = new Formats.SAFEXML. SAFEXMLContainer(i18n, alfen, ocmf, edl40),
                        ChargeIT  = new Formats.ChargeIT.ChargeITContainer(i18n, alfen, bsm)
                    };

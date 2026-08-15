@@ -26,6 +26,7 @@ using cloud.charging.open.chargy.Formats.EMH;
 using cloud.charging.open.chargy.Formats.GDF;
 using cloud.charging.open.chargy.Formats.Mennekes;
 using cloud.charging.open.chargy.Formats.OCMF;
+using cloud.charging.open.chargy.Formats.PCDF;
 
 #endregion
 
@@ -269,6 +270,10 @@ namespace cloud.charging.open.chargy.Formats
 
                     case ChargePointFormat.SessionContext:
                         method = new ChargePointCrypt01(I18N, LookupMeter);
+                        break;
+
+                    case PCDFFormat.SessionContext:
+                        method = new PCDFCrypt01(I18N, LookupMeter);
                         break;
 
                 }
