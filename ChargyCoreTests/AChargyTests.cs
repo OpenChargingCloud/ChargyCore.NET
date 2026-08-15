@@ -19,6 +19,11 @@
 
 using System.Reflection;
 
+using org.GraphDefined.Vanaheimr.Illias;
+
+using cloud.charging.open.chargy.IO;
+using cloud.charging.open.chargy.qrcodes;
+
 #endregion
 
 namespace cloud.charging.open.chargy.tests
@@ -117,6 +122,122 @@ namespace cloud.charging.open.chargy.tests
         public static String ReadExpectedReport(String FixtureName)
 
             => ReadTextFixture(FixtureName);
+
+        #endregion
+
+
+        #region Verify               (Files, ValidationRules = null)
+
+        /// <summary>
+        /// Run the given files through the whole Chargy pipeline, exactly as an
+        /// application would.
+        /// </summary>
+        /// <param name="Files">The files an EV driver handed over.</param>
+        public static Task<Object> Verify(IEnumerable<FileInfo> Files)
+
+            => new ContentFormatDetector(
+                   I18NDictionary.Default(),
+                   ChargeTransparencyFormats.All(),
+                   new PDFAttachmentExtractor(),
+                   new QRCodeDecoder()
+               ).DetectAndConvertContentFormat(Files);
+
+        #endregion
+
+        #region VerifyFixtures       (FixtureNames, ValidationRules = null)
+
+        /// <summary>
+        /// Run the given test fixtures through the whole Chargy pipeline.
+        /// </summary>
+        /// <param name="FixtureNames">Fixture paths relative to "TestData".</param>
+        public static Task<Object> VerifyFixtures(IEnumerable<String> FixtureNames)
+
+            => Verify(
+                   FixtureNames.Select(fixtureName => {
+
+                       // ChargyCore.TS hands the fixture path over as the file
+                       // name, and some formats look at it, so the tests must not
+                       // quietly shorten it.
+                       return new FileInfo(
+                                  fixtureName,
+                                  ReadBinaryFixture(fixtureName),
+                                  MIMETypeOf(fixtureName)
+                              );
+
+                   })
+               );
+
+        #endregion
+
+        #region ExpectReport         (FixtureName, ExpectedFixture, ValidationRules = null)
+
+        /// <summary>
+        /// Verify a fixture and compare the report against its golden file.
+        /// </summary>
+        /// <param name="FixtureName">A fixture path relative to "TestData".</param>
+        /// <param name="ExpectedFixture">The golden report to compare against.</param>
+        public static Task ExpectReport(String  FixtureName,
+                                        String  ExpectedFixture)
+
+            => ExpectReport([ FixtureName ], ExpectedFixture);
+
+        #endregion
+
+        #region ExpectReport         (FixtureNames, ExpectedFixture, ValidationRules = null)
+
+        /// <summary>
+        /// Verify several fixtures together and compare the report against its
+        /// golden file.
+        /// </summary>
+        /// <param name="FixtureNames">Fixture paths relative to "TestData".</param>
+        /// <param name="ExpectedFixture">The golden report to compare against.</param>
+        public static async Task ExpectReport(IEnumerable<String>  FixtureNames,
+                                              String               ExpectedFixture)
+        {
+
+            var result    = await VerifyFixtures(FixtureNames);
+            var actual    = VerificationReport.Format(result);
+            var expected  = ReadExpectedReport(ExpectedFixture);
+
+            AssertReportLines(actual, expected);
+
+        }
+
+        #endregion
+
+        #region AssertReportLines    (Actual, Expected)
+
+        /// <summary>
+        /// Compare two verification reports line by line.
+        ///
+        /// Every differing line is reported, not just the first: when a format
+        /// port goes wrong it usually goes wrong in several places at once, and
+        /// seeing all of them together is what tells you which single mistake
+        /// caused them. This mirrors the "expect.soft" of ChargyCore.TS.
+        /// </summary>
+        /// <param name="Actual">The report Chargy produced.</param>
+        /// <param name="Expected">The golden report.</param>
+        public static void AssertReportLines(String  Actual,
+                                             String  Expected)
+        {
+
+            var actualLines    = Actual.  Replace("\r\n", "\n").Split('\n');
+            var expectedLines  = Expected.Replace("\r\n", "\n").Split('\n');
+            var lineCount      = Math.Max(actualLines.Length, expectedLines.Length);
+
+            Assert.Multiple(() => {
+
+                for (var i = 0; i < lineCount; i++)
+                    Assert.That(
+                        i < actualLines.  Length ? actualLines[i]   : null,
+                        Is.EqualTo(
+                        i < expectedLines.Length ? expectedLines[i] : null),
+                        $"verification report line {i + 1}"
+                    );
+
+            });
+
+        }
 
         #endregion
 

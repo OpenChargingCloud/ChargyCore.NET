@@ -168,6 +168,22 @@ namespace cloud.charging.open.chargy.IO
 
         #endregion
 
+        #region (static) All()
+
+        /// <summary>
+        /// Every charge transparency data format this library implements.
+        ///
+        /// This is what an application wants unless it has a reason to be
+        /// pickier. Formats are added here as they are ported.
+        /// </summary>
+        public static ChargeTransparencyFormats All()
+
+            => new () {
+                   // Phase 4 fills these in, one directory at a time.
+               };
+
+        #endregion
+
 
     }
 
