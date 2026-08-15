@@ -100,7 +100,7 @@ namespace cloud.charging.open.chargy.Formats.ChargeIT
                 return ParseOldContainer(JSON);
 
             if (ContainerContexts.Contains(context))
-                return ParseNewContainer(JSON);
+                return TryParseNewContainer(JSON);
 
             return new SessionCryptoResult(
                        SessionVerificationResult.InvalidSessionFormat,
@@ -218,14 +218,19 @@ namespace cloud.charging.open.chargy.Formats.ChargeIT
 
         #endregion
 
-        #region (private) ParseNewContainer(JSON)
+        #region TryParseNewContainer(JSON)
 
         /// <summary>
         /// Read the newer chargeIT container, which also describes the charging
         /// station, the meter and what the charging session cost.
+        ///
+        /// Public because the OCPI container declares the very same shape under a
+        /// name of its own. Handing it here rather than copying the reader is what
+        /// keeps the two names from drifting into two different answers about the
+        /// same file — but it does mean the caller, not the context, decides.
         /// </summary>
         /// <param name="JSON">A JSON object.</param>
-        private Object ParseNewContainer(JObject JSON)
+        public Object TryParseNewContainer(JObject JSON)
         {
 
             var checks = new ChargeITFormatChecks(i18n, 81);

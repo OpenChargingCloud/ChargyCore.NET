@@ -106,7 +106,9 @@ ChargyCore.NET/
 │   │   ├── PCDF/         PCDFFormat.cs, PCDFCrypt01.cs, PCDFDocument.cs
 │   │   ├── PTB/          PTBContainer.cs
 │   │   ├── XMLContainer/ XMLContainerFormat.cs
-│   │   └── QIDigital/    DCC.cs, DCoA.cs, DCoC.cs
+│   │   ├── OCPI/         OCPIFormat.cs
+│   │   └── QIDigital/    DigitalCalibrationCertificate.cs, DigitalCertificates.cs,
+│   │                     DCCTypes.cs, DCCMeasurement.cs
 │   │
 │   ├── Containers/                     data *representations* (not formats)
 │   │   ├── ChargeITContainer.cs        both chargeIT variants
@@ -535,7 +537,26 @@ infrastructure. Every step is a self-contained increment: format + its `ACrypt` 
    station from identifications alone. No golden file prints an address, so nothing
    caught it. That is the whole reason a container exists, and an EV driver shown
    only a meter serial number had been told less than the file contained.
-9. **QIDigital DCC/DCoA/DCoC + OCPI** → `OCPITests`
+9. **QIDigital DCC/DCoA/DCoC + OCPI** ✅ **done** → `OCPITests` (4), `QIDigitalTests` (4).
+   OCPI carries two shapes. The older is a thin envelope around a single signed OCMF
+   value plus what the roaming protocol knows and the signed data does not. The newer
+   declares itself as `ocpi-2.1` and is, field for field, the newer chargeIT
+   container — so it is **handed to that reader** rather than copied, because two
+   readers for one shape drift apart and an EV driver would then get a different
+   answer depending on which name the file happened to carry. (ChargyCore.TS does
+   copy it; `ChargeITContainer.TryParseNewContainer` is the entry point that makes
+   delegation possible here.)
+   The substance is the meter: the container describes it and so does the signed
+   payload, and they are not equal. What the meter signed wins; the container may
+   only fill the gaps. OCMF has no field for a manufacturer's web address or a
+   hardware revision, so those can only come from the container — which is also the
+   clearest evidence that the merge happened at all.
+   The three QIDigital files are **34 TypeScript interface declarations and nothing
+   else** — no parser, no verification, no fixture, and referenced nowhere but
+   `index.ts`. A TypeScript interface costs nothing at runtime; a C# data model has
+   to be written out, so it is, with `TryParse`/`ToJSON` throughout and a round-trip
+   test that says nothing was dropped and nothing invented. That is the only claim
+   available without a real certificate, and it is stated as such.
 
 ### Phase 5 — Live link & online features ⬜
 Hermod-based `IURLResolver`, live-link transports (HTTPS, HTTP SSE, WebSocket), TOTP.

@@ -409,11 +409,26 @@ namespace cloud.charging.open.chargy.Formats.OCMF
 
             #region The energy meter, so that the record says which device signed
 
+            // A container may describe the meter too, and the two descriptions are
+            // not equal: what the meter signed about itself wins, and the container
+            // may only fill the gaps. OCMF has no field for a manufacturer's web
+            // address or a hardware revision, so those can only come from the
+            // container — but its idea of the model must never override the signed
+            // one.
+            var containerMeter = ContainerInfos?.EnergyMeter;
+
             var energyMeter = new EnergyMeter(
                                   meterSerial,
-                                  Manufacturer:     Text(payload, "MV") is String vendor ? new Manufacturer(vendor) : null,
-                                  Model:            Text(payload, "MM") is String model  ? new DeviceModel (model)  : null,
-                                  Firmware:         Text(payload, "MF") is String meterFirmware ? new Firmware(meterFirmware) : null,
+                                  Manufacturer:     Text(payload, "MV") is String vendor
+                                                        ? new Manufacturer(vendor, Contact: containerMeter?.Manufacturer?.Contact)
+                                                        : containerMeter?.Manufacturer,
+                                  Model:            Text(payload, "MM") is String model
+                                                        ? new DeviceModel(model, URL: containerMeter?.Model?.URL)
+                                                        : containerMeter?.Model,
+                                  Firmware:         Text(payload, "MF") is String meterFirmware
+                                                        ? new Firmware(meterFirmware)
+                                                        : containerMeter?.Firmware,
+                                  Hardware:         containerMeter?.Hardware,
                                   SignatureFormat:  MeasurementContext
                               );
 

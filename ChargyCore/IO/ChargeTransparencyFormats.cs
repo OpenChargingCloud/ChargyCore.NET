@@ -206,21 +206,26 @@ namespace cloud.charging.open.chargy.IO
             var ocmf   = new Formats.OCMF.OCMFFormat(i18n);
             var edl40  = new Formats.EDL40.EDL40Format(i18n);
             var bsm    = new Formats.BSM.  BSMFormat  (i18n);
+            var chargeIT = new Formats.ChargeIT.ChargeITContainer(i18n, alfen, bsm);
 
             return new () {
-                       Alfen     = alfen,
-                       OCMF      = ocmf,
-                       EDL40     = edl40,
-                       BSM       = bsm,
+
+                       Alfen         = alfen,
+                       OCMF          = ocmf,
+                       EDL40         = edl40,
+                       BSM           = bsm,
+                       Mennekes      = new Formats.Mennekes.    MennekesFormat    (i18n),
+                       ChargePoint   = new Formats.ChargePoint. ChargePointFormat (i18n),
+                       PCDF          = new Formats.PCDF.        PCDFFormat        (i18n),
+                       XMLContainer  = new Formats.XMLContainer.XMLContainerFormat(i18n),
+
                        // The containers carry someone else's signed data, so they
                        // have to know the formats they may be carrying.
-                       Mennekes     = new Formats.Mennekes.   MennekesFormat   (i18n),
-                       ChargePoint  = new Formats.ChargePoint.ChargePointFormat(i18n),
-                       PCDF         = new Formats.PCDF.       PCDFFormat       (i18n),
-                       PTB          = new Formats.PTB.        PTBContainer     (i18n, ocmf),
-                       XMLContainer = new Formats.XMLContainer.XMLContainerFormat(i18n),
-                       SAFEXML   = new Formats.SAFEXML. SAFEXMLContainer(i18n, alfen, ocmf, edl40),
-                       ChargeIT  = new Formats.ChargeIT.ChargeITContainer(i18n, alfen, bsm)
+                       SAFEXML       = new Formats.SAFEXML.     SAFEXMLContainer  (i18n, alfen, ocmf, edl40),
+                       PTB           = new Formats.PTB.         PTBContainer      (i18n, ocmf),
+                       ChargeIT      = chargeIT,
+                       OCPI          = new Formats.OCPI.        OCPIFormat        (i18n, ocmf, chargeIT)
+
                    };
 
         }
