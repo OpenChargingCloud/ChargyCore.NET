@@ -118,18 +118,36 @@ namespace cloud.charging.open.chargy.tests.Formats
 
         #endregion
 
-        #region SAFETestdata04()
+        #region SAFETestdata04_IsSignedOnACurveChargyCoreTSCannotVerify()
 
         /// <summary>
-        /// A further SAFE container carrying OCMF.
+        /// The one golden file this port deliberately does not reproduce.
+        ///
+        /// SAFE-Testdata-04 is signed with "ECDSA-secp192k1-SHA256". ChargyCore.TS
+        /// recognises that algorithm but has no curve for it, so it reports
+        /// InvalidPublicKey — not because anything is wrong with the record, but
+        /// because its JavaScript curve library does not carry secp192k1.
+        /// BouncyCastle does, so this port checks the signature and finds it good.
+        ///
+        /// The expectation is therefore the golden file with exactly that one
+        /// substitution applied, rather than a disabled test or an edited fixture.
+        /// Every other line still has to match, so any further drift fails here —
+        /// and the day ChargyCore.TS gains the curve, this test starts failing and
+        /// says so.
         /// </summary>
         [Test]
-        public Task SAFETestdata04()
+        public async Task SAFETestdata04_IsSignedOnACurveChargyCoreTSCannotVerify()
+        {
 
-            => ExpectReport(
-                   "SAFE/SAFE-Testdata-04.xml",
-                   "SAFE/SAFE-Testdata-04.expected.txt"
-               );
+            var result    = await VerifyFixtures([ "SAFE/SAFE-Testdata-04.xml" ]);
+            var actual    = VerificationReport.Format(result);
+
+            var expected  = ReadExpectedReport("SAFE/SAFE-Testdata-04.expected.txt").
+                                Replace("InvalidPublicKey", "ValidSignature");
+
+            AssertReportLines(actual, expected);
+
+        }
 
         #endregion
 

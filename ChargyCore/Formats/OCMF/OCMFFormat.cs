@@ -519,6 +519,16 @@ namespace cloud.charging.open.chargy.Formats.OCMF
         /// rather than random: verifying the same record twice has to produce the
         /// same report, and two different records still have to be told apart.
         ///
+        /// Hashed over the canonical form of the parsed payload and signature,
+        /// never over the document text. The text carries formatting the record
+        /// does not — the DZG test data is pretty-printed JSON spanning dozens of
+        /// lines, and a checkout that rewrites line endings, which is the default
+        /// on Windows, gave an otherwise identical record a different identifier.
+        /// Minified against pretty-printed would diverge just as much on one
+        /// machine. Signature verification never noticed, because it canonicalises
+        /// the payload before checking — which is exactly why the identifier had
+        /// to stop depending on the text too.
+        ///
         /// Deliberately not the document's own hash value, which looks like the
         /// obvious candidate but follows the signature algorithm — SHA-384 or
         /// SHA-512 for some, and empty for Ed25519, Ed448 and ML-DSA, which sign
@@ -532,10 +542,13 @@ namespace cloud.charging.open.chargy.Formats.OCMF
                              SHA256.HashData(
                                  Encoding.UTF8.GetBytes(
                                      String.Join(
-                                         " ",
-                                         Documents.Select(document => document.Raw.Length        > 0 ? document.Raw
-                                                                    : document.RawPayload.Length > 0 ? document.RawPayload
-                                                                    : CanonicalJSON.Serialize(document.Payload))
+                                         "\n",
+                                         Documents.Select(document => CanonicalJSON.Serialize(
+                                                                          new JObject(
+                                                                              new JProperty("payload",   document.Payload),
+                                                                              new JProperty("signature", document.Signature)
+                                                                          )
+                                                                      ))
                                      )
                                  )
                              )

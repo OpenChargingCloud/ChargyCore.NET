@@ -405,15 +405,16 @@ infrastructure. Every step is a self-contained increment: format + its `ACrypt` 
 1. **SAFE XML container + Alfen** ✅ **done** → `AlfenTests` (7). Note the plan miscounted here:
    the `SAFE-Testdata-*` fixtures carry **OCMF** payloads, not Alfen ones, so `SAFETests`
    and `SAFE_withChargyExtensionsTests` unlock with step 2, not this one.
-2. **OCMF** 🚧 — the document scanner and signature validation are done (14 cases). The
-   charge transparency record building follows. Tracking ChargyCore.TS **v0.12.0**:
-   `dbe61c0` replaced the hardcoded OCMF session id with `"OCMF-" + SHA-256` of the
-   documents and derives `begin`/`end` from the readings, which regenerated ten golden
-   files. Two details of that fix have to be carried over exactly: the hash is over
-   `raw ?? rawPayload ?? canonicalJSON(payload)` joined with a single space, **not** over
-   `hashValue` (which follows the signature algorithm and is empty for the directly
-   signing ones); and the timestamps are ordered **by instant, not lexically**, because
-   they keep the meter's own UTC offset.
+2. **OCMF** ✅ **done** → `OCMFScannerTests` (14), `OCMFSecp192Tests` (6), `OCMFTests` (9).
+   The session id is `"OCMF-"` plus the SHA-256 of `canonicalJSON({payload, signature})`
+   per document, joined by a newline — the **canonical form, never the document text**,
+   which upstream corrected in `456252f` after a Windows checkout rewrote the line
+   endings of a pretty-printed fixture and gave the same record a different identity.
+   Two further details matter: the hash is not `hashValue` (that follows the signature
+   algorithm and is empty for the directly signing ones), and `begin`/`end` are ordered
+   **by instant, not lexically**, because the timestamps keep the meter's own UTC offset.
+   Documents are grouped by their session identity and only the first group becomes a
+   record, which is what keeps two drivers on one meter from being merged into one bill.
 2. **OCMF** (+ versions, modern signatures, tariff text, BET extension, diagnostics, error propagation) → (~16+)
 3. **EMH + EDL40 (SML)** → `EMHCrypt01Tests`, `EDL40Tests` (10)
 4. **chargeIT container + BSM + GDF** → `ChargeITTests` (11)
@@ -598,32 +599,17 @@ short and reviewable, because every entry weakens the golden-file parity contrac
 |---|---|---|
 | OCMF `secp192k1` / `secp192r1` | Verified here, `InvalidPublicKey` in ChargyCore.TS | BouncyCastle carries the curves; the JavaScript library does not. Decision 9 |
 
+This costs exactly one golden file. `SAFE-Testdata-04` is signed with
+`ECDSA-secp192k1-SHA256`, so ChargyCore.TS reports `InvalidPublicKey` on three lines
+where this port reports `ValidSignature`. `SAFETestdata04_IsSignedOnACurveChargyCoreTSCannotVerify`
+compares against the golden file with exactly that substitution applied, rather than
+disabling the test or editing the fixture: every other line still has to match, and
+the day ChargyCore.TS gains the curve the test fails and says so.
+
 Everything else that looked like a bug was reported upstream and fixed there rather
 than worked around here — the `secp512r1` typo, the host-timezone dependency in the
 signed timestamps, and the hardcoded OCMF session id. That is the preferred route:
 a deviation has to be maintained forever, an upstream fix does not.
-
-### Open against ChargyCore.TS v0.12.0 (OCMF)
-
-Two differences remain in the OCMF golden files. Both are localised; neither is
-guesswork.
-
-* **The session id of a multi-document group.** Every fixture whose group holds one
-  OCMF document matches byte for byte. The two whose group holds *two* — `OCMF-DZG-01`
-  and `SAFE-Testdata-02` — do not. Instrumenting ChargyCore.TS itself shows why this
-  is not a porting mistake: within a single call to `tryToParseOCMFv1_0`, the computed
-  `sessionId` is `OCMF-0506b9f7…` while re-evaluating the very same expression two
-  lines later gives `OCMF-cfbef549…`, which is also what this port computes and what
-  Node's own crypto and `@noble/hashes` both produce for the dumped input bytes
-  (2777 bytes, two 1388-character documents joined by one space). Upstream's own tests
-  pass, so the committed golden files agree with whatever `sessionId` actually holds —
-  the formula in the source and the value in the fixtures do not currently agree.
-  **This needs a decision upstream, not a workaround here.**
-
-* **`SAFE-Testdata-04` public key.** The golden file expects `InvalidPublicKey`; this
-  port reports `ValidSignature`. To be investigated — most likely the point encoding
-  or the curve check, and worth knowing which of the two implementations is right
-  before either is changed.
 
 ### Still to settle (not blocking)
 
