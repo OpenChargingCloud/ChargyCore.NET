@@ -26,6 +26,7 @@ using org.GraphDefined.Vanaheimr.Illias;
 
 using cloud.charging.open.chargy.IO;
 using cloud.charging.open.chargy.Formats.Alfen;
+using cloud.charging.open.chargy.Formats.EDL40;
 using cloud.charging.open.chargy.Formats.OCMF;
 
 #endregion
@@ -52,9 +53,11 @@ namespace cloud.charging.open.chargy.Formats.SAFEXML
     /// <param name="I18N">The dictionary used to describe what went wrong.</param>
     /// <param name="Alfen">The Alfen format, for containers carrying Alfen data.</param>
     /// <param name="OCMF">The OCMF format, for containers carrying OCMF data.</param>
+    /// <param name="EDL40">The EDL40 format, for containers carrying SML data.</param>
     public partial class SAFEXMLContainer(I18NDictionary  I18N,
                                           AlfenFormat?    Alfen = null,
-                                          OCMFFormat?     OCMF  = null) : IXMLChargeTransparencyFormat
+                                          OCMFFormat?     OCMF  = null,
+                                          EDL40Format?    EDL40 = null) : IXMLChargeTransparencyFormat
     {
 
         #region Data
@@ -62,6 +65,7 @@ namespace cloud.charging.open.chargy.Formats.SAFEXML
         private readonly I18NDictionary  i18n   = I18N;
         private readonly AlfenFormat?    alfen  = Alfen;
         private readonly OCMFFormat?     ocmf   = OCMF;
+        private readonly EDL40Format?    edl40  = EDL40;
 
         #endregion
 
@@ -187,11 +191,15 @@ namespace cloud.charging.open.chargy.Formats.SAFEXML
                                    ? ocmf.TryParse(signedValues, publicKeyText, keyEncoding, containerInfos)
                                    : Unsupported();
 
-                    // EDL40 arrives with its own step of the port.
                     case "edl_40_p":
                     case "isa_edl_40_p":
                     case "sml_edl40_p":
-                        return Unsupported();
+                        return edl40 is not null
+                                   // An SML message carries no public key of its
+                                   // own, so without the container's one nothing
+                                   // about it can be checked.
+                                   ? edl40.TryParse(signedValues, publicKeyText, containerInfos)
+                                   : Unsupported();
 
                     default:
                         return Invalid("UnknownOrInvalidChargingSessionFormat");

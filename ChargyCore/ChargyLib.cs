@@ -159,11 +159,21 @@ namespace cloud.charging.open.chargy
         #region ParseHexString  (Hex)
 
         /// <summary>
-        /// Parse a hexadecimal string into its bytes.
+        /// Parse a hexadecimal string into its bytes, as leniently as
+        /// "parseHexString()" of ChargyCore.TS does.
         ///
-        /// A trailing half byte is dropped, exactly like "parseHexString()" of
-        /// ChargyCore.TS does, because some vendors pad their hex strings.
+        /// A trailing half byte is dropped, because some vendors pad their hex
+        /// strings — and a pair that is not hexadecimal at all becomes a zero byte
+        /// rather than an exception.
+        ///
+        /// That leniency is deliberate. This is what assembles the buffers the
+        /// energy meters signed, and those buffers hold identifications a vendor
+        /// may well have filled with something that is not hexadecimal. Refusing
+        /// them would turn "this signature does not match" — a verdict an EV driver
+        /// can act on — into a crash on a file somebody handed us. Use
+        /// <see cref="HexToBytes"/> where a malformed hex string really is an error.
         /// </summary>
+        /// <param name="Hex">A hexadecimal string.</param>
         public static Byte[] ParseHexString(String Hex)
         {
 
@@ -171,15 +181,57 @@ namespace cloud.charging.open.chargy
             var bytes   = new Byte[length];
 
             for (var i = 0; i < length; i++)
-                bytes[i] = Byte.Parse(
-                               Hex.AsSpan(2 * i, 2),
-                               NumberStyles.HexNumber,
-                               CultureInfo.InvariantCulture
-                           );
+                bytes[i] = ParseHexPair(Hex.AsSpan(2 * i, 2));
 
             return bytes;
 
         }
+
+        #endregion
+
+        #region (private) ParseHexPair  (Pair)
+
+        /// <summary>
+        /// Two characters as a byte, reading as many leading hexadecimal digits as
+        /// there are and yielding zero when there is none — which is what
+        /// JavaScript's "parseInt(pair, 16)" does, and what an energy meter's
+        /// signed buffer therefore has to contain.
+        /// </summary>
+        /// <param name="Pair">Two characters of a hexadecimal string.</param>
+        private static Byte ParseHexPair(ReadOnlySpan<Char> Pair)
+        {
+
+            var value  = 0;
+            var digits = 0;
+
+            foreach (var character in Pair.TrimStart())
+            {
+
+                var digit = HexDigit(character);
+
+                if (digit < 0)
+                    break;
+
+                value = value * 16 + digit;
+                digits++;
+
+            }
+
+            return digits > 0
+                       ? (Byte) value
+                       : (Byte) 0;
+
+        }
+
+        /// <summary>The value of a hexadecimal digit, or -1 when it is not one.</summary>
+        private static Int32 HexDigit(Char Character)
+
+            => Character switch {
+                   >= '0' and <= '9'  => Character - '0',
+                   >= 'a' and <= 'f'  => Character - 'a' + 10,
+                   >= 'A' and <= 'F'  => Character - 'A' + 10,
+                   _                  => -1
+               };
 
         #endregion
 
@@ -451,6 +503,38 @@ namespace cloud.charging.open.chargy
         public static DateTimeOffset ParseUnixTimestamp(Int64 UnixTime)
 
             => DateTimeOffset.FromUnixTimeSeconds(UnixTime);
+
+        #endregion
+
+        #region ToISO8601               (Timestamp)
+
+        /// <summary>
+        /// An ISO 8601 timestamp exactly as JavaScript's Date.toISOString() writes
+        /// it: always in UTC, always with three decimal places.
+        /// </summary>
+        /// <param name="Timestamp">A point in time.</param>
+        public static String ToISO8601(DateTimeOffset Timestamp)
+
+            => Timestamp.UtcDateTime.
+                         ToString("yyyy-MM-ddTHH:mm:ss.fffZ", CultureInfo.InvariantCulture);
+
+        #endregion
+
+        #region UnixTimestampToISO8601  (Seconds)
+
+        /// <summary>
+        /// The given number of seconds since the UNIX epoch as an ISO 8601
+        /// timestamp, in the form JavaScript writes it.
+        ///
+        /// The formats keep their timestamps as text rather than as points in
+        /// time, because the verification reports shared with ChargyCore.TS print
+        /// them verbatim — so how they are written is part of the contract, not a
+        /// presentation detail.
+        /// </summary>
+        /// <param name="Seconds">Seconds since the UNIX epoch.</param>
+        public static String UnixTimestampToISO8601(Int64 Seconds)
+
+            => ToISO8601(DateTimeOffset.FromUnixTimeSeconds(Seconds));
 
         #endregion
 

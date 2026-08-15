@@ -54,6 +54,10 @@ namespace cloud.charging.open.chargy.IO
     /// An optional resolver for URLs. Without one a URL is reported as a URL and
     /// nothing is fetched, which is the privacy-preserving default.
     /// </param>
+    /// <param name="ValidationRules">
+    /// The plausibility rules to apply. A signature says the meter really
+    /// reported this; it does not say the meter was right.
+    /// </param>
     public class ContentFormatDetector(I18NDictionary              I18N,
                                        ChargeTransparencyFormats?  Formats                 = null,
                                        IPDFAttachmentExtractor?    PDFAttachmentExtractor  = null,

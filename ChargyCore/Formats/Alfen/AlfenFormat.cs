@@ -264,7 +264,7 @@ namespace cloud.charging.open.chargy.Formats.Alfen
                        MeterStatus        = ReverseHex             (data[26..28]),                     // 26..28
                        AdapterStatus      = ReverseHex             (data[28..30]),                     // 28..30
                        SecondIndex        = BinaryPrimitives.ReadInt32LittleEndian(data[30..34]),      // 30..34  seconds since the adapter was started
-                       Timestamp          = UnixTimestampToISO8601(
+                       Timestamp          = ChargyLib.UnixTimestampToISO8601(
                                                 BinaryPrimitives.ReadInt32LittleEndian(data[34..38])), // 34..38
                        ObisId             = Convert.ToHexStringLower(data[38..44]),                    // 38..44  01 00 01 08 00 ff
                        UnitEncoded        = data[44],                                                  // 44..45  1e => 30 => Wh
@@ -492,21 +492,6 @@ namespace cloud.charging.open.chargy.Formats.Alfen
             return Convert.ToHexStringLower(reversed);
 
         }
-
-        #endregion
-
-        #region (private, static) UnixTimestampToISO8601(Seconds)
-
-        /// <summary>
-        /// The ISO 8601 form of a UNIX timestamp, as JavaScript's
-        /// Date.toISOString() writes it — always UTC, always with milliseconds.
-        /// </summary>
-        /// <param name="Seconds">Seconds since the UNIX epoch.</param>
-        private static String UnixTimestampToISO8601(Int32 Seconds)
-
-            => DateTimeOffset.FromUnixTimeSeconds(Seconds).
-                              UtcDateTime.
-                              ToString("yyyy-MM-ddTHH:mm:ss.fffZ", System.Globalization.CultureInfo.InvariantCulture);
 
         #endregion
 

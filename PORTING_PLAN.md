@@ -94,7 +94,9 @@ ChargyCore.NET/
 │   │   ├── EMH/          EMHCrypt01.cs
 │   │   ├── GDF/          GDFCrypt01.cs
 │   │   ├── BSM/          BSMCrypt01.cs
-│   │   ├── EDL40/        EDL40.cs, SMLReader.cs
+│   │   ├── EDL40/        EDL40Format.cs, EDL40Crypt01.cs, EDL40Document.cs,
+│   │   │                 EDL40SignatureData.cs, EDL40Measurement.cs,
+│   │   │                 SmlReader.cs, SmlValue.cs
 │   │   ├── Mennekes/     Mennekes.cs, MennekesCrypt01.cs
 │   │   ├── ChargePoint/  ChargePoint.cs, ChargePointCrypt01.cs
 │   │   ├── PCDF/         PCDF.cs, PCDFCrypt01.cs
@@ -415,8 +417,24 @@ infrastructure. Every step is a self-contained increment: format + its `ACrypt` 
    **by instant, not lexically**, because the timestamps keep the meter's own UTC offset.
    Documents are grouped by their session identity and only the first group becomes a
    record, which is what keeps two drivers on one meter from being merged into one bill.
-2. **OCMF** (+ versions, modern signatures, tariff text, BET extension, diagnostics, error propagation) → (~16+)
-3. **EMH + EDL40 (SML)** → `EMHCrypt01Tests`, `EDL40Tests` (10)
+   Still open within OCMF: the BET tariff text extension, the version matrix, the
+   modern-signature fixtures (EdDSA / ML-DSA), diagnostics and error propagation.
+3. **EMH + EDL40 (SML)** ✅ **done** → `EMHCrypt01Tests` (6), `EDL40Tests` (12).
+   EDL40 is the only format that is *never* detected on its own: an SML message carries
+   no public key, so it can only be read inside a container that supplies one. It
+   therefore has no slot among the text formats and is reached solely through the SAFE
+   container — which is also why `EDL40/edl-40-0*.xml`, which declare no signed data
+   format, never reach the pipeline and are tested by parsing them directly.
+   The layout deduces its own curve from the lengths of key and signature (48 bytes of
+   key → secp192r1 with a 24 byte hash, 64 → secp256r1 with 32), and the meter signs
+   its *own local time*, not the UTC instant behind it. An ISA document is already a
+   whole charging session: start and stop reading sit in one signed block, so unlike
+   every other format this one does not insist on two documents.
+   Beyond the four upstream tests, the unused ISA fixtures are now covered: two of them
+   are genuine tampering and are reported as invalid, two are incomplete transactions
+   whose signatures nevertheless hold, and `isa-edl-40p-veri-fail` is byte-for-byte
+   identical to `isa-edl-40p-ok` — its "failure" lives only in the container's unsigned
+   `context` attribute, which must never be allowed to downgrade a signature.
 4. **chargeIT container + BSM + GDF** → `ChargeITTests` (11)
 5. **Mennekes** → `MennekesTests` (7)
 6. **ChargePoint** → `ChargePointTests` (6)
@@ -598,6 +616,7 @@ short and reviewable, because every entry weakens the golden-file parity contrac
 | Where | Difference | Why |
 |---|---|---|
 | OCMF `secp192k1` / `secp192r1` | Verified here, `InvalidPublicKey` in ChargyCore.TS | BouncyCastle carries the curves; the JavaScript library does not. Decision 9 |
+| `SmlReader` | SML lists may nest at most 64 levels | The reader is recursive and the input is a file somebody sent us. A few kilobytes of nothing but "list of one" exhausts the stack, and in .NET that ends the process instead of raising something catchable — a JavaScript engine turns the same input into an ordinary exception, so upstream needs no limit. A real GetListRes nests about seven levels. |
 
 This costs exactly one golden file. `SAFE-Testdata-04` is signed with
 `ECDSA-secp192k1-SHA256`, so ChargyCore.TS reports `InvalidPublicKey` on three lines
@@ -612,6 +631,17 @@ signed timestamps, and the hardcoded OCMF session id. That is the preferred rout
 a deviation has to be maintained forever, an upstream fix does not.
 
 ### Still to settle (not blocking)
+
+* **A record that verifies and delivers nothing is reported simply as verified.**
+  The ISA fixtures `isa-edl-40p-begin-fail` and `isa-edl-40p-update-fail` are a
+  `Transaction.Begin` and a `Transaction.Update` snapshot: their start and stop
+  readings are identical, so the session delivered 0 kWh, and their signatures are
+  perfectly valid. The SAFE reference software calls both "Ungültig" because they are
+  not completed transactions. Neither ChargyCore.TS nor this port says anything about
+  it — a caller has to compare the readings itself. Raising a warning would be a
+  behaviour change and belongs upstream first, so it is recorded rather than
+  implemented. `AnIncompleteTransactionStillCarriesAValidSignature` pins the current
+  answer either way.
 
 * **`PublicKeyParser.TryParseDER` handles named curves only.** A SubjectPublicKeyInfo
   that spells its curve out as explicit domain parameters instead of naming it by
