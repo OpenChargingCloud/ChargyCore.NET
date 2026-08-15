@@ -73,9 +73,21 @@ The porting strategy, the solution layout and the phase plan are documented in
 | 1 | ChargyLib, data structures, i18n, validation rules | ✅ **done** |
 | 2 | Cryptography (ECDSA, EdDSA, ML-DSA), ACrypt, signed JSON | ✅ **done** |
 | 3 | Content format detection, archives, PDF/A-3, QR codes | ✅ **done** |
-| 4 | The charge transparency data formats | 🚧 next |
+| 4 | The charge transparency data formats | 🚧 in progress |
 | 5 | Charge Transparency Live Link, URL resolution | ⬜ planned |
 | 6 | Documentation, samples, packaging | ⬜ planned |
+
+Phase 4 in detail:
+
+| Format | Status |
+|---|---|
+| SAFE XML container | ✅ **done** (Alfen payloads; OCMF and EDL40 with their own steps) |
+| Alfen | ✅ **done** |
+| OCMF | ⬜ next |
+| EMH, EDL40 | ⬜ planned |
+| chargeIT, BSM, GDF | ⬜ planned |
+| Mennekes, ChargePoint, PCDF | ⬜ planned |
+| PTB, XMLContainer, KEBA, QIDigital, OCPI | ⬜ planned |
 
 Phase 3 in detail:
 

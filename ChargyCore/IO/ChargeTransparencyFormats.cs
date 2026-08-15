@@ -176,11 +176,20 @@ namespace cloud.charging.open.chargy.IO
         /// This is what an application wants unless it has a reason to be
         /// pickier. Formats are added here as they are ported.
         /// </summary>
-        public static ChargeTransparencyFormats All()
+        public static ChargeTransparencyFormats All(I18NDictionary? I18N = null)
+        {
 
-            => new () {
-                   // Phase 4 fills these in, one directory at a time.
-               };
+            var i18n   = I18N ?? I18NDictionary.Default();
+            var alfen  = new Formats.Alfen.AlfenFormat(i18n);
+
+            return new () {
+                       Alfen    = alfen,
+                       // The SAFE container carries someone else's signed data, so
+                       // it has to know the formats it may be carrying.
+                       SAFEXML  = new Formats.SAFEXML.SAFEXMLContainer(i18n, alfen)
+                   };
+
+        }
 
         #endregion
 

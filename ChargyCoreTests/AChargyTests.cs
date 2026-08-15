@@ -137,7 +137,7 @@ namespace cloud.charging.open.chargy.tests
 
             => new ContentFormatDetector(
                    I18NDictionary.Default(),
-                   ChargeTransparencyFormats.All(),
+                   ChargeTransparencyFormats.All(I18NDictionary.Default()),
                    new PDFAttachmentExtractor(),
                    new QRCodeDecoder()
                ).DetectAndConvertContentFormat(Files);

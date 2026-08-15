@@ -22,6 +22,7 @@ using System.Xml.Linq;
 using Newtonsoft.Json.Linq;
 
 using cloud.charging.open.chargy.Crypto;
+using cloud.charging.open.chargy.Formats;
 
 #endregion
 
@@ -57,7 +58,8 @@ namespace cloud.charging.open.chargy.IO
                                        ChargeTransparencyFormats?  Formats                 = null,
                                        IPDFAttachmentExtractor?    PDFAttachmentExtractor  = null,
                                        IQRCodeDecoder?             QRCodeDecoder           = null,
-                                       IURLResolver?               URLResolver             = null)
+                                       IURLResolver?               URLResolver             = null,
+                                       ValidationRules?            ValidationRules         = null)
     {
 
         #region Data
@@ -89,6 +91,9 @@ namespace cloud.charging.open.chargy.IO
 
         /// <summary>An optional resolver for URLs.</summary>
         public IURLResolver?               URLResolver               { get; } = URLResolver;
+
+        /// <summary>The plausibility rules to apply to a verified charging session.</summary>
+        public ValidationRules?            ValidationRules           { get; } = ValidationRules;
 
         #endregion
 
@@ -147,7 +152,7 @@ namespace cloud.charging.open.chargy.IO
             #endregion
 
             if (processedFiles.Count == 1)
-                return processedFiles[0].Result
+                return Processed(processedFiles[0].Result)
                            ?? new SessionCryptoResult(
                                   SessionVerificationResult.InvalidSessionFormat,
                                   I18N.GetMultilanguageText("UnknownOrInvalidChargeTransparencyRecord")
@@ -156,7 +161,7 @@ namespace cloud.charging.open.chargy.IO
             if (processedFiles.Count > 1 &&
                 MergeChargeTransparencyRecords(processedFiles) is ChargeTransparencyRecord mergedRecord)
             {
-                return mergedRecord;
+                return Processed(mergedRecord)!;
             }
 
             return new SessionCryptoResult(
@@ -168,6 +173,24 @@ namespace cloud.charging.open.chargy.IO
 
         #endregion
 
+
+        #region (private) Processed(Result)
+
+        /// <summary>
+        /// Verify a charge transparency record, and pass anything else through.
+        ///
+        /// A parsed record is only a claim until this has run: the parser
+        /// establishes what the record says, and this establishes whether the
+        /// signatures back it up.
+        /// </summary>
+        /// <param name="Result">What a data format made of a file.</param>
+        private Object? Processed(Object? Result)
+
+            => Result is ChargeTransparencyRecord record
+                   ? new ChargeTransparencyRecordProcessor(I18N, ValidationRules).Process(record)
+                   : Result;
+
+        #endregion
 
         #region ExpandPDFAttachments(Files)
 

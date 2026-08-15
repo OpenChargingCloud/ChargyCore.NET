@@ -35,8 +35,17 @@ namespace cloud.charging.open.chargy.Crypto
     /// </summary>
     /// <param name="Description">The name of the data format, e.g. "EMHCrypt01".</param>
     /// <param name="I18N">The dictionary used to describe what went wrong.</param>
-    public abstract class ACrypt(String          Description,
-                                 I18NDictionary  I18N)
+    /// <param name="MeterLookup">
+    /// How to find the energy meter a measurement claims to come from.
+    ///
+    /// The meter is what carries the public key, and it lives elsewhere in the
+    /// charge transparency record than the measurement does — so a measurement
+    /// cannot be verified in isolation, only in the context of the record that
+    /// declared its meter.
+    /// </param>
+    public abstract class ACrypt(String                    Description,
+                                 I18NDictionary            I18N,
+                                 Func<String, EnergyMeter?>?  MeterLookup = null)
     {
 
         #region Properties
@@ -46,6 +55,20 @@ namespace cloud.charging.open.chargy.Crypto
 
         /// <summary>The dictionary used to describe what went wrong.</summary>
         public I18NDictionary  I18N           { get; } = I18N;
+
+        #endregion
+
+        #region (protected) GetEnergyMeter(EnergyMeterId)
+
+        /// <summary>
+        /// Find the energy meter a measurement claims to come from.
+        /// </summary>
+        /// <param name="EnergyMeterId">The identification of an energy meter.</param>
+        protected EnergyMeter? GetEnergyMeter(String? EnergyMeterId)
+
+            => EnergyMeterId is not null && MeterLookup is not null
+                   ? MeterLookup(EnergyMeterId)
+                   : null;
 
         #endregion
 

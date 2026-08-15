@@ -269,7 +269,16 @@ namespace cloud.charging.open.chargy
         Hex,
 
         /// <summary>Base64.</summary>
-        Base64
+        Base64,
+
+        /// <summary>
+        /// Base32, as defined by RFC 4648.
+        ///
+        /// Used by the Alfen format, because its signed meter values have to
+        /// survive being printed on a receipt and typed back in by hand: base32
+        /// has no lower case and no characters an EV driver could confuse.
+        /// </summary>
+        Base32
 
     }
 
@@ -299,6 +308,10 @@ namespace cloud.charging.open.chargy
 
                 case "base64":
                     DataEncoding = DataEncoding.Base64;
+                    return true;
+
+                case "base32":
+                    DataEncoding = DataEncoding.Base32;
                     return true;
 
                 default:
@@ -335,7 +348,8 @@ namespace cloud.charging.open.chargy
 
             => DataEncoding switch {
                    DataEncoding.Base64  => "base64",
-                   _                         => "hex"
+                   DataEncoding.Base32  => "base32",
+                   _                    => "hex"
                };
 
         #endregion
