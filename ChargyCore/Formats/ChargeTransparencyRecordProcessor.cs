@@ -20,6 +20,7 @@
 using cloud.charging.open.chargy.Crypto;
 using cloud.charging.open.chargy.Formats.Alfen;
 using cloud.charging.open.chargy.Formats.BSM;
+using cloud.charging.open.chargy.Formats.ChargePoint;
 using cloud.charging.open.chargy.Formats.EDL40;
 using cloud.charging.open.chargy.Formats.EMH;
 using cloud.charging.open.chargy.Formats.GDF;
@@ -264,6 +265,10 @@ namespace cloud.charging.open.chargy.Formats
 
                     case MennekesFormat.SessionContext:
                         method = new MennekesCrypt01(I18N, LookupMeter);
+                        break;
+
+                    case ChargePointFormat.SessionContext:
+                        method = new ChargePointCrypt01(I18N, LookupMeter);
                         break;
 
                 }

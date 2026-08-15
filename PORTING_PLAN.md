@@ -102,7 +102,7 @@ ChargyCore.NET/
 │   │   │                 SmlReader.cs, SmlValue.cs
 │   │   ├── Mennekes/     MennekesFormat.cs, MennekesCrypt01.cs,
 │   │   │                 MennekesChargingProcess.cs, MennekesMeasurement.cs
-│   │   ├── ChargePoint/  ChargePoint.cs, ChargePointCrypt01.cs
+│   │   ├── ChargePoint/  ChargePointFormat.cs, ChargePointCrypt01.cs
 │   │   ├── PCDF/         PCDF.cs, PCDFCrypt01.cs
 │   │   └── QIDigital/    DCC.cs, DCoA.cs, DCoC.cs
 │   │
@@ -474,7 +474,22 @@ infrastructure. Every step is a self-contained increment: format + its `ACrypt` 
    added rather than applied, and a 50 byte signature is not a longer signature —
    only its first 48 bytes are checked, and the other two belong inside the signed
    block where a 48 byte signature puts the event counter instead.
-6. **ChargePoint** → `ChargePointTests` (6)
+6. **ChargePoint** ✅ **done** → `ChargePointTests` (18).
+   The only format that signs the *document* rather than the readings: the bytes of
+   "secrrct", with the signature alongside in "secrrct.sign". So the readings carry
+   no signatures of their own and are labelled by their place in the session —
+   `StartValue`, `StopValue` — rather than as valid or invalid. They are as good as
+   the document and no better, and saying "valid signature" about one would claim
+   evidence that does not exist.
+   Both upstream fixes from §7b landed with it: the public-key fallback stops at the
+   first key that verifies, and the hash variable is spelled `sha384Value`.
+   Two shapes exist. Upstream tests only the newer one, so the older *invoice* shape
+   — tariffs, parking periods, and a charging session whose span has to be worked out
+   from the line items — had no coverage in either implementation. It does now: six
+   tariff variants on both curves, twelve records, all verifying. Whether a variant
+   records a parking period is stated per case, because the ones billed purely by
+   time or energy do not, and a test that expected parking everywhere would have to
+   be weakened until it checked nothing.
 7. **PCDF** → `PCDFTests` (16)
 8. **PTB container + XMLContainer + KEBA** → (3)
 9. **QIDigital DCC/DCoA/DCoC + OCPI** → `OCPITests`
@@ -579,8 +594,7 @@ Baseline of this port moved from `f6b3b3b` to `46eec22`. Four changes matter:
 * **`chargePoint.ts` public key fallback** — a `break` was added so the first
   matching public key wins. Without it, when no key matched the EVSE Id and all
   available keys were tried as a fallback, a later non-matching key overwrote an
-  already successful result. **Port the fixed behaviour in Phase 4**, not the
-  loop as it was read earlier.
+  already successful result. ✅ Ported with the fix in Phase 4 step 6.
 * **`CryptoUtils.signJSONMessage` verifies before attaching** — a signature that
   does not validate is no longer left behind in the caller's message.
   **Phase 2.**

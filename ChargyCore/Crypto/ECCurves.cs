@@ -236,21 +236,29 @@ namespace cloud.charging.open.chargy.Crypto
         #region (static) TryGet(CurveName)
 
         /// <summary>
-        /// The verifier of the given curve name, or null when it is unknown.
-        /// Both the SEC and the NIST spellings are accepted.
+        /// The verifier of the given curve, or null when it is unknown.
+        ///
+        /// A curve reaches this by many names. Charge transparency records spell
+        /// it the SEC way, PEM files carry the ANSI X9.62 name, NIST calls the
+        /// same curves P-256 and friends, and Chargy's own key parser names a key
+        /// after the *algorithm* it belongs to. All of them are accepted, because
+        /// which spelling a file happened to use says nothing about the curve.
         /// </summary>
-        /// <param name="CurveName">The name of an elliptic curve.</param>
+        /// <param name="CurveName">The name of an elliptic curve, or of an algorithm on one.</param>
         public static ECCurveVerifier? TryGet(String? CurveName)
 
             => CurveName?.Trim().ToLowerInvariant() switch {
-                   "secp192k1"                       => secp192k1,
-                   "secp192r1" or "p192" or "p-192"  => secp192r1,
-                   "secp224k1"                       => secp224k1,
-                   "secp256k1"                       => secp256k1,
-                   "secp256r1" or "p256" or "p-256"  => secp256r1,
-                   "secp384r1" or "p384" or "p-384"  => secp384r1,
-                   "secp521r1" or "p521" or "p-521"  => secp521r1,
-                   _                                 => null
+
+                   "secp192k1"                                                       => secp192k1,
+                   "secp192r1" or "p192" or "p-192" or "prime192v1"                  => secp192r1,
+                   "secp224k1"                                                       => secp224k1,
+                   "secp256k1" or "ecdsa-secp256k1"                                  => secp256k1,
+                   "secp256r1" or "p256" or "p-256" or "prime256v1" or "ecdsa-p256"  => secp256r1,
+                   "secp384r1" or "p384" or "p-384" or "ecdsa-p384"                  => secp384r1,
+                   "secp521r1" or "p521" or "p-521" or "ecdsa-p521"                  => secp521r1,
+
+                   _                                                                 => null
+
                };
 
         #endregion

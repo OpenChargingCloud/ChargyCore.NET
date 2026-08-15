@@ -167,8 +167,16 @@ namespace cloud.charging.open.chargy
         /// <param name="ChargingSession">A charging session.</param>
         public ChargeTransparencyRecord AddChargingSession(ChargingSession ChargingSession)
         {
+
+            // The session points back at the record, because some formats sign the
+            // session as a whole and have to reach the record's public keys to
+            // check it — the key belongs to the operator, not to the session.
+            ChargingSession.CTR = this;
+
             chargingSessions.Add(ChargingSession);
+
             return this;
+
         }
 
         #endregion

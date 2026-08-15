@@ -214,7 +214,8 @@ namespace cloud.charging.open.chargy.IO
                        BSM       = bsm,
                        // The containers carry someone else's signed data, so they
                        // have to know the formats they may be carrying.
-                       Mennekes  = new Formats.Mennekes.MennekesFormat(i18n),
+                       Mennekes     = new Formats.Mennekes.   MennekesFormat   (i18n),
+                       ChargePoint  = new Formats.ChargePoint.ChargePointFormat(i18n),
                        SAFEXML   = new Formats.SAFEXML. SAFEXMLContainer(i18n, alfen, ocmf, edl40),
                        ChargeIT  = new Formats.ChargeIT.ChargeITContainer(i18n, alfen, bsm)
                    };

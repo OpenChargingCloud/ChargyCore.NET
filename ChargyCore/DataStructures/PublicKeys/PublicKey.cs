@@ -114,6 +114,61 @@ namespace cloud.charging.open.chargy
         #endregion
 
 
+        #region Identifications
+
+        /// <summary>
+        /// Every identification this key claims to belong to.
+        ///
+        /// A public key file says who it is for in its subject, which may be a
+        /// single name, a list of them, or an object mapping a kind of thing — an
+        /// EVSE, a charging station, an energy meter — to its identification. All
+        /// of them are equally a claim by whoever wrote the file, so all of them
+        /// are offered here and none is privileged.
+        /// </summary>
+        public IEnumerable<String> Identifications
+        {
+            get
+            {
+
+                switch (Subject)
+                {
+
+                    case null:
+                        yield break;
+
+                    case JValue value when value.Type == JTokenType.String:
+                        yield return value.Value<String>()!;
+                        break;
+
+                    case JArray array:
+                        foreach (var element in array)
+                            if (element.Type == JTokenType.String)
+                                yield return element.Value<String>()!;
+                        break;
+
+                    case JObject subject:
+                        foreach (var property in subject.Properties())
+                        {
+
+                            if (property.Value.Type == JTokenType.String)
+                                yield return property.Value.Value<String>()!;
+
+                            else if (property.Value is JArray values)
+                                foreach (var element in values)
+                                    if (element.Type == JTokenType.String)
+                                        yield return element.Value<String>()!;
+
+                        }
+                        break;
+
+                }
+
+            }
+        }
+
+        #endregion
+
+
         #region (static) TryParse(JSON, out PublicKey)
 
         /// <summary>
