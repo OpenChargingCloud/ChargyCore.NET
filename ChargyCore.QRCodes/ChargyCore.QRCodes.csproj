@@ -26,6 +26,13 @@
     <PackageReference Include="ZXing.Net" Version="0.16.11" />
     <PackageReference Include="SkiaSharp" Version="4.151.1" />
     <PackageReference Include="Svg.Skia" Version="5.2.1" />
+
+    <!-- The SkiaSharp package itself ships native libraries for Windows and macOS
+         only, so on Linux every image decode fails. The "NoDependencies" variant is
+         self-contained and does not require libfontconfig1 to be installed, which
+         matters for the slim container images this library tends to run in. Reading
+         a QR code never needs fonts. -->
+    <PackageReference Include="SkiaSharp.NativeAssets.Linux.NoDependencies" Version="4.151.1" />
   </ItemGroup>
 
   <ItemGroup>

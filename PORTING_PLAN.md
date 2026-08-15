@@ -575,16 +575,9 @@ message — the latter only with test vectors to prove it matches.
 | 5 | Measurement value type | **`System.Decimal`** — 28–29 significant digits, and full control over formatting, which matters because the values are printed raw into the golden reports |
 | 6 | QR code decoding lives where? | **Revised in Phase 3.** Decision 4 put the default implementations in the core library. The PDF reader is there, and needs no dependency at all. The QR decoder is not: it pulls SkiaSharp with its native binaries, plus Svg.Skia and ZXing.Net. It therefore moved into **`ChargyCore.QRCodes`**, behind `IQRCodeDecoder`. This is closer to ChargyCore.TS than the original decision was — there the `canvas` / `pngjs` / `jpeg-js` modules are *optional* dependencies loaded at runtime, and QR reading degrades gracefully when they are absent. Without a decoder Chargy passes QR images through untouched, exactly as the TypeScript does |
 | 7 | PDF/A-3 reading: hand-rolled or `PdfPig`? | **Hand-rolled**, as decision 4 preferred. Rather than parse cross-reference tables, `PDFDocument` scans the file for `N G obj` definitions directly. That treats classic tables, cross-reference streams, incremental updates and *damaged* tables all the same way — and a charge transparency record is far too important to lose to a table some invoice generator got wrong. Object streams, `FlateDecode`, `ASCIIHexDecode`, `ASCII85Decode` and the PNG predictors are supported; encrypted PDFs yield nothing |
+| 8 | Where does the PDF reader live? | **Styx**, as `org.GraphDefined.Vanaheimr.Illias.PDFDocument` / `PDFParser` / `PDFObject` / `PDFEmbeddedFile`, next to the existing CBOR, COSE, CSV and JSON readers. Reading embedded files out of a PDF/A-3 is not a Chargy concern — ZUGFeRD and Factur-X invoices work the same way. The code was written from scratch against the PDF specification rather than derived from ChargyCore.TS, which uses `pdfjs-dist`, so it carries Styx's Apache-2.0 header. What stays in ChargyCore is `PDFAttachmentExtractor`: the closed list of attachment types worth looking at, behind `IPDFAttachmentExtractor` |
 
 ### Still to settle (not blocking)
-
-* **Hermod is referenced but not yet used.** Phase 3's `HTTPURLResolver` is a ~60 line
-  one-shot GET, and Hermod's `HTTPSClient` is built around a known `IPAddress` and
-  `TCPPort` for long-lived connections — using it here would mean resolving DNS and
-  splitting URLs by hand for no gain. `System.Net.Http.HttpClient` does the job, and
-  `IURLResolver` keeps the choice swappable. Hermod earns its place in **Phase 5**, where
-  the live link needs WebSockets, server-sent events and TOTP-secured endpoints — and
-  `ChargeTransparencyLiveLink` already models a `TOTPConfig` that Hermod implements.
 
 * **Existing prior art** — `VanaheimrElectric/libs/WWCP_OCPP/WWCP_OCPP_Common/Chargy/`
   holds a small (~700 LOC) partial Chargy port (`ChargyLib`, `ACrypt`, `EMHCrypt01`,

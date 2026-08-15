@@ -15,27 +15,14 @@
  * limitations under the License.
  */
 
-namespace cloud.charging.open.chargy.IO.PDF
+#region Usings
+
+using org.GraphDefined.Vanaheimr.Illias;
+
+#endregion
+
+namespace cloud.charging.open.chargy.IO
 {
-
-    /// <summary>
-    /// A file embedded in a PDF document.
-    /// </summary>
-    /// <param name="Name">The name of the embedded file.</param>
-    /// <param name="Data">The contents of the embedded file.</param>
-    /// <param name="Subtype">The MIME type the PDF claims the file has, if any.</param>
-    public readonly record struct PDFEmbeddedFile(String                Name,
-                                                  ReadOnlyMemory<Byte>  Data,
-                                                  String?               Subtype = null)
-    {
-
-        /// <summary>Return a text representation of this embedded file.</summary>
-        public override String ToString()
-
-            => $"{Name} ({Data.Length} byte(s))";
-
-    }
-
 
     /// <summary>
     /// Extracts the charge transparency data embedded in a PDF invoice.
@@ -54,12 +41,16 @@ namespace cloud.charging.open.chargy.IO.PDF
 
 
     /// <summary>
-    /// Reads the files embedded in a PDF/A-3 document.
+    /// Picks the charge transparency data out of a PDF/A-3 invoice.
     ///
     /// A charge point operator can hand an EV driver a single PDF that is both a
     /// human-readable invoice and a verifiable charge transparency record: the
     /// record travels as an embedded attachment. Chargy therefore looks inside
     /// every PDF it is given before deciding it is not transparency data.
+    ///
+    /// Reading the PDF itself is not Chargy's business and lives in Styx, as
+    /// <see cref="PDFDocument"/>. What is Chargy's business is deciding which of
+    /// the embedded files are worth looking at.
     /// </summary>
     public class PDFAttachmentExtractor : IPDFAttachmentExtractor
     {
@@ -69,7 +60,7 @@ namespace cloud.charging.open.chargy.IO.PDF
         /// <summary>
         /// Which embedded file types are taken out of a PDF/A-3 container.
         ///
-        /// Deliberately a closed list: a PDF invoice may also carry a company
+        /// Deliberately a closed list: the same invoice may also carry a company
         /// logo or a ZUGFeRD bookkeeping file, and handing those to the charge
         /// transparency format detection would only produce noise.
         /// </summary>

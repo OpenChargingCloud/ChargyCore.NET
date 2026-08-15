@@ -32,6 +32,22 @@ namespace cloud.charging.open.chargy.qrcodes
 {
 
     /// <summary>
+    /// The QR code decoder could not run at all.
+    ///
+    /// Thrown when the native image decoding library is missing or does not match
+    /// the running platform. This is deliberately not reported as "no QR code
+    /// found": a deployment problem must never be dressed up as a verdict about
+    /// an EV driver's charging receipt.
+    /// </summary>
+    /// <param name="InnerException">The platform error that made the decoder unavailable.</param>
+    public class QRCodeDecoderUnavailableException(Exception InnerException)
+
+        : Exception($"The QR code decoder could not run: {InnerException.Message} " +
+                     "Is the SkiaSharp native library for this platform present?",
+                    InnerException);
+
+
+    /// <summary>
     /// Reads the text out of a QR code image, using ZXing to decode the code and
     /// Skia to decode the image it sits in.
     ///
@@ -123,6 +139,16 @@ namespace cloud.charging.open.chargy.qrcodes
                            : null;
 
             }
+            catch (Exception exception) when (IsBrokenInstallation(exception))
+            {
+
+                // A decoder that cannot run at all is a deployment problem, and it
+                // must not be reported as "this image holds no QR code" — that
+                // reading would tell an EV driver their charging receipt is
+                // worthless when in truth the software was never able to look at it.
+                throw new QRCodeDecoderUnavailableException(exception);
+
+            }
             catch (Exception)
             {
                 // An image Chargy cannot decode is not a QR code it can read.
@@ -135,6 +161,28 @@ namespace cloud.charging.open.chargy.qrcodes
 
         #endregion
 
+
+        #region (private, static) IsBrokenInstallation(Exception)
+
+        /// <summary>
+        /// Whether an exception says that the image decoding stack cannot run at
+        /// all, rather than that this particular image was unreadable.
+        ///
+        /// The native Skia library ships per platform, so a deployment that is
+        /// missing the one for its operating system fails on every single image —
+        /// silently, and identically to an image that simply holds no QR code.
+        /// </summary>
+        /// <param name="Exception">An exception.</param>
+        private static Boolean IsBrokenInstallation(Exception Exception)
+
+            => Exception is DllNotFoundException
+                         or EntryPointNotFoundException
+                         or BadImageFormatException ||
+              (Exception is TypeInitializationException &&
+               Exception.InnerException is not null &&
+               IsBrokenInstallation(Exception.InnerException));
+
+        #endregion
 
         #region (private, static) Rasterize        (Data, MIMEType)
 
@@ -260,8 +308,18 @@ namespace cloud.charging.open.chargy.qrcodes
 
             using (var canvas = new SKCanvas(normalized))
             {
+
                 canvas.Clear(SKColors.White);
-                canvas.DrawBitmap(Bitmap, 0, 0);
+
+                // Nearest neighbour, because this is a straight copy at the same
+                // size and any smoothing would only blur the edges of a QR module.
+                canvas.DrawBitmap(
+                    Bitmap,
+                    0,
+                    0,
+                    new SKSamplingOptions(SKFilterMode.Nearest, SKMipmapMode.None)
+                );
+
             }
 
             return new RGBLuminanceSource(

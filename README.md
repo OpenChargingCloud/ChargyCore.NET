@@ -84,10 +84,10 @@ Phase 3 in detail:
 | `ContentTypes` — magic-byte sniffing, MIME normalization | ✅ **done** |
 | `ArchiveReader` — ZIP, TAR, GZip, BZip2, including nested archives | ✅ **done** |
 | ChargePoint `secrrct` + `secrrct.sign` combination | ✅ **done** |
-| `PDFAttachmentExtractor` — the PDF/A-3 `/EmbeddedFiles` name tree | ✅ **done** |
+| `PDFAttachmentExtractor` — PDF/A-3 attachments, reading the PDF itself via Styx | ✅ **done** |
 | `QRCodeDecoder` — PNG, JPEG, GIF, WEBP, BMP and SVG | ✅ **done** |
 | `PublicKeyFiles` — pairing a key file with the record it belongs to | ✅ **done** |
-| `IURLResolver` / `HTTPURLResolver` — opt-in, off by default | ✅ **done** |
+| `IURLResolver` / `HTTPURLResolver` — over Hermod, opt-in, off by default | ✅ **done** |
 | `ContentFormatDetector` — the whole detection pipeline | ✅ **done** |
 | `ChargeTransparencyFormats` — the registry Phase 4 fills in | ✅ **done** |
 

@@ -22,7 +22,6 @@ using System.Xml.Linq;
 using Newtonsoft.Json.Linq;
 
 using cloud.charging.open.chargy.Crypto;
-using cloud.charging.open.chargy.IO.PDF;
 
 #endregion
 

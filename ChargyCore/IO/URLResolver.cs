@@ -17,9 +17,14 @@
 
 #region Usings
 
-using System.Net.Http.Headers;
-
 using Newtonsoft.Json.Linq;
+
+using org.GraphDefined.Vanaheimr.Hermod;
+using org.GraphDefined.Vanaheimr.Hermod.DNS;
+using org.GraphDefined.Vanaheimr.Hermod.HTTP;
+
+// Hermod's URL and Chargy's SimpleURL parameter share the name "URL".
+using HermodURL = org.GraphDefined.Vanaheimr.Hermod.HTTP.URL;
 
 #endregion
 
@@ -53,25 +58,33 @@ namespace cloud.charging.open.chargy.IO
     /// <summary>
     /// Asks a URL what it has to offer, over HTTP.
     /// </summary>
-    /// <param name="HTTPClient">
-    /// An optional HTTP client to use. Sharing one across resolutions is the
-    /// caller's business, because a client owns connections.
+    /// <param name="DNSClient">
+    /// The DNS client used to look the host up. Sharing one across an application
+    /// is worthwhile, because it caches.
+    /// </param>
+    /// <param name="RemoteCertificateValidator">
+    /// How to judge the TLS certificate of the service. The default asks the
+    /// operating system, and a certificate the operating system rejects is not
+    /// accepted here either — a link that promises charging data is exactly the
+    /// kind of link worth impersonating.
     /// </param>
     /// <param name="Timeout">How long to wait for an answer.</param>
-    public class HTTPURLResolver(HttpClient?  HTTPClient  = null,
-                                 TimeSpan?    Timeout     = null) : IURLResolver
+    public class HTTPURLResolver(IDNSClient?                                                DNSClient                   = null,
+                                 RemoteTLSServerCertificateValidationHandler<IHTTPClient>?  RemoteCertificateValidator  = null,
+                                 TimeSpan?                                                  Timeout                     = null) : IURLResolver
     {
-
-        #region Data
-
-        private readonly HttpClient  httpClient  = HTTPClient ?? new HttpClient();
-
-        #endregion
 
         #region Properties
 
+        /// <summary>The DNS client used to look the host up.</summary>
+        public IDNSClient?                                                DNSClient                     { get; } = DNSClient;
+
+        /// <summary>How to judge the TLS certificate of the service.</summary>
+        public RemoteTLSServerCertificateValidationHandler<IHTTPClient>   RemoteCertificateValidator    { get; } = RemoteCertificateValidator
+                                                                                                                      ?? TLSValidationExtensions.AskTheOS;
+
         /// <summary>How long to wait for an answer.</summary>
-        public TimeSpan Timeout    { get; } = Timeout ?? TimeSpan.FromSeconds(10);
+        public TimeSpan                                                   Timeout                       { get; } = Timeout ?? TimeSpan.FromSeconds(10);
 
         #endregion
 
@@ -94,25 +107,39 @@ namespace cloud.charging.open.chargy.IO
             try
             {
 
-                using var timeout  = CancellationTokenSource.CreateLinkedTokenSource(CancellationToken);
-                timeout.CancelAfter(Timeout);
-
-                using var request  = new HttpRequestMessage(HttpMethod.Get, URL.URL);
-                request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue(ContentTypes.Chargy));
-
-                using var response = await httpClient.SendAsync(request, timeout.Token).ConfigureAwait(false);
-
-                if (!response.IsSuccessStatusCode)
+                if (HermodURL.TryParse(URL.URL) is not HermodURL remoteURL)
                     return URL;
 
-                var contentType  = ContentTypes.Normalize(response.Content.Headers.ContentType?.ToString());
-                var body         = await response.Content.ReadAsStringAsync(timeout.Token).ConfigureAwait(false);
+                var chargy    = HTTPContentType.TryParse(ContentTypes.Chargy, out var contentType)
+                                    ? contentType
+                                    : null;
+
+                using var httpClient  = new HTTPSClient(
+                                            remoteURL,
+                                            RemoteCertificateValidator,
+                                            ConnectTimeout:  Timeout,
+                                            ReceiveTimeout:  Timeout,
+                                            DNSClient:       DNSClient
+                                        );
+
+                var response = await httpClient.GET(
+                                         remoteURL.Path,
+                                         Accept:             chargy is not null
+                                                                 ? AcceptTypes.FromHTTPContentTypes(chargy)
+                                                                 : null,
+                                         RequestTimeout:     Timeout,
+                                         CancellationToken:  CancellationToken
+                                     ).ConfigureAwait(false);
+
+                if (!response.HTTPStatusCode.IsSuccessful)
+                    return URL;
 
                 JObject? serviceData = null;
 
                 try
                 {
-                    serviceData = JObject.Parse(body);
+                    if (response.HTTPBodyAsUTF8String is String body && body.Length > 0)
+                        serviceData = JObject.Parse(body);
                 }
                 catch (Exception)
                 {
@@ -125,7 +152,7 @@ namespace cloud.charging.open.chargy.IO
                            URL.Method,
                            URL.AcceptType,
                            URL.Actions,
-                           contentType == ContentTypes.Chargy
+                           chargy is not null && response.ContentType == chargy
                                ? [ "chargy" ]
                                : URL.ServiceTypes,
                            serviceData ?? URL.ServiceData
