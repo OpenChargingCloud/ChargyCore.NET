@@ -17,6 +17,8 @@
 
 #region Usings
 
+using System.Globalization;
+
 using Newtonsoft.Json.Linq;
 
 using org.GraphDefined.Vanaheimr.Aegir;
@@ -477,11 +479,19 @@ namespace cloud.charging.open.chargy
 
         /// <summary>
         /// Whether the given JSON is a charge transparency live link.
+        ///
+        /// The whole document is checked, not just its context. A live link is
+        /// not evidence to be judged but a list of addresses somebody is being
+        /// invited to contact, and a field that is not what it claims to be
+        /// makes the document unusable rather than merely incomplete.
         /// </summary>
         /// <param name="JSON">A JSON object.</param>
         public static Boolean IsAChargeTransparencyLiveLink(JObject JSON)
 
-            => JSON["@context"]?.Value<String>() == JSONLDContext;
+            // Deliberately the same code path as reading one: a predicate that
+            // says yes where the reader says no would send an application off to
+            // fetch data through a document nobody could read.
+            => TryParse(JSON, out _);
 
         #endregion
 
@@ -497,44 +507,143 @@ namespace cloud.charging.open.chargy
 
             ChargeTransparencyLiveLink = null;
 
-            if (!IsAChargeTransparencyLiveLink(JSON))
+            if (JSON["@context"]?.Value<String>() != JSONLDContext)
                 return false;
 
-            var transports = new List<Transport>();
+            #region When the link was written, if it says
 
-            if (JSON["transports"] is JArray transportArray)
-                foreach (var transportJSON in transportArray.OfType<JObject>())
-                    if (Transport.TryParse(transportJSON, out var transport))
-                        transports.Add(transport!);
-                    else
-                        // An unreadable transport means the link cannot be trusted
-                        // to describe how to reach the station at all.
+            String? timestamp = null;
+
+            if (JSON["timestamp"] is JToken timestampJSON)
+                switch (timestampJSON.Type)
+                {
+
+                    case JTokenType.Null:
+                        break;
+
+                    case JTokenType.String:
+                        timestamp = timestampJSON.Value<String>();
+                        break;
+
+                    // A JSON reader that turns timestamps into dates of its own
+                    // accord — which is Newtonsoft's default — must not cost the
+                    // caller their live link. The instant survives; only its
+                    // spelling becomes the one Chargy writes. Nothing here is
+                    // signed, so nothing depends on the original characters.
+                    case JTokenType.Date:
+                        // A JSON date arrives as a DateTime or as a DateTimeOffset,
+                        // depending on whether the text carried an offset.
+                        timestamp = (timestampJSON is JValue { Value: DateTimeOffset offset }
+                                         ? offset
+                                         : new DateTimeOffset(timestampJSON.Value<DateTime>().ToUniversalTime(), TimeSpan.Zero)).
+                                    ToUniversalTime().
+                                    ToString("yyyy-MM-dd'T'HH:mm:ss.fff'Z'", CultureInfo.InvariantCulture);
+                        break;
+
+                    default:
                         return false;
 
-            LiveLinkConnector? connector = null;
+                }
 
-            if (JSON["connector"] is JObject connectorJSON &&
-               !LiveLinkConnector.TryParse(connectorJSON, out connector))
+            #endregion
+
+            #region The fields that are simply what they are, or the document is not one
+
+            if (JSON["description"] is JToken descriptionJSON &&
+                descriptionJSON     is not JObject)
             {
                 return false;
             }
 
+            if (JSON["imageURLs"]   is JToken imageURLsJSON &&
+               (imageURLsJSON       is not JArray imageURLArray ||
+                imageURLArray.Any(imageURL => imageURL.Type != JTokenType.String)))
+            {
+                return false;
+            }
+
+            #endregion
+
+            #region Where the charging station stands
+
+            GeoCoordinate? geoLocation = null;
+
+            if (JSON["geoLocation"] is JToken geoLocationJSON)
+            {
+
+                if (geoLocationJSON is not JObject geoLocationObject)
+                    return false;
+
+                geoLocation = GeoCoordinate.TryParse(geoLocationObject);
+
+                if (!geoLocation.HasValue)
+                    return false;
+
+            }
+
+            #endregion
+
+            #region How to reach it
+
+            var transports = new List<Transport>();
+
+            if (JSON["transports"] is JToken transportsJSON)
+            {
+
+                if (transportsJSON is not JArray transportArray)
+                    return false;
+
+                foreach (var transportJSON in transportArray)
+                    // An unreadable transport means the link cannot be trusted
+                    // to describe how to reach the station at all. Keeping the
+                    // readable ones and dropping the rest would leave an
+                    // application believing it had been told everything.
+                    if (transportJSON is not JObject transportObject ||
+                        !Transport.TryParse(transportObject, out var transport))
+                    {
+                        return false;
+                    }
+                    else
+                        transports.Add(transport!);
+
+            }
+
+            LiveLinkConnector? connector = null;
+
+            if (JSON["connector"] is JToken connectorJSON &&
+               (connectorJSON     is not JObject connectorObject ||
+                !LiveLinkConnector.TryParse(connectorObject, out connector)))
+            {
+                return false;
+            }
+
+            #endregion
+
+            #region ..., and who says so
+
             var signatures = new List<Signature>();
 
-            if (JSON["signatures"] is JArray signatureArray)
+            if (JSON["signatures"] is JToken signaturesJSON)
+            {
+
+                if (signaturesJSON is not JArray signatureArray)
+                    return false;
+
                 foreach (var signatureJSON in signatureArray.OfType<JObject>())
                     if (Signature.TryParse(signatureJSON, out var signature))
                         signatures.Add(signature!);
 
+            }
+
+            #endregion
+
             ChargeTransparencyLiveLink = new ChargeTransparencyLiveLink(
-                                             JSON["timestamp"]?.Value<String>(),
-                                             JSON["description"] is JObject descriptionJSON
-                                                 ? I18NString.Parse(descriptionJSON)
+                                             timestamp,
+                                             JSON["description"] is JObject description
+                                                 ? I18NString.Parse(description)
                                                  : null,
                                              StringList.Parse(JSON["imageURLs"]),
-                                             JSON["geoLocation"] is JObject geoLocationJSON
-                                                 ? GeoCoordinate.TryParse(geoLocationJSON)
-                                                 : null,
+                                             geoLocation,
                                              connector,
                                              transports,
                                              signatures

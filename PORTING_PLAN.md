@@ -338,11 +338,13 @@ as a hard, automatically-checked contract — not a hope.
 | `CryptoUtils.test.ts` | `Crypto/CryptoUtilsTests` | 11 |
 | `ALFEN.tests.ts` | `Formats/AlfenTests` | 9 |
 | `SAFE.tests.ts`, `CanonicalJSON.test.ts` | `Containers/SAFEXMLTests`, `Crypto/CanonicalJSONTests` | 8 each |
-| `Mennekes`, `SimpleURLs` | … | 7 each |
+| `Mennekes` | … | 7 |
+| `SimpleURLs` | `IO/SimpleURLTests` | 7 → 9 |
+| `ChargeTransparencyLiveLink` | `ChargeTransparencyLiveLinkTests` | 3 → 4 |
 | `ChargePoint`, `EMHCrypt01`, `OCMFVersions`, `SAFE_withChargyExtensions` | … | 6 each |
 | `PublicKeyFiles` | … | 5 |
 | `EDL40`, `OCMFTariffText` | `Formats/OCMFTariffTextTests` | 4 each |
-| `OCMF`, `ChargeTransparencyLiveLink`, `chargyInterfaces` | … | 3 each |
+| `OCMF`, `chargyInterfaces` | … | 3 each |
 | `OCMFDiagnostics` + `OCMFErrorPropagation` | `Formats/OCMFDiagnosticsTests` (merged: three tests, one subject) | 3 |
 | `PTBContainer` | … | 2 |
 | `KEBA` | … | 1 |
@@ -625,8 +627,62 @@ infrastructure. Every step is a self-contained increment: format + its `ACrypt` 
    those exact characters are what the meter signed and escaping them is the presentation
    layer's job at the moment of presentation.
 
-### Phase 5 — Live link & online features ⬜
-Hermod-based `IURLResolver`, live-link transports (HTTPS, HTTP SSE, WebSocket), TOTP.
+### Phase 5 — Live link & online features ✅ **done, as far as there is anything to port**
+→ `ChargeTransparencyLiveLinkTests` (4), `SimpleURLTests` (9).
+
+Most of this arrived with the Phase 3 detector and only lacked tests, which is where
+the two defects below came from. What the phase covers:
+
+**A live link** is the one input that is not evidence: it is a list of addresses,
+printed on a sticker anybody can replace, that somebody is being invited to contact.
+`IsAChargeTransparencyLiveLink` therefore checks the whole document rather than only
+its JSON-LD context, and does so through `TryParse`, so that the predicate and the
+reader can never answer differently — a predicate saying yes where the reader says no
+would send an application off to fetch data through a document nobody could read. A
+transport Chargy cannot speak rejects the link entirely: keeping the readable ones
+would leave an application believing it had been told everything. A link without a
+timestamp is stamped when it is read, because live data is only worth something if its
+age is known and a sticker carries no clock.
+
+**A bare URL** is recognised from a text file and from a photographed QR code, and is
+**not** contacted unless the application supplies a resolver. Following the link is
+useful and it is also an observation — it tells the operator that this driver is
+looking at this charging session, right now — so it happens only when asked. Only
+`http:` and `https:` are accepted at all.
+
+**`HTTPURLResolver`** is where Hermod earns its place, and it is the only genuinely new
+code in this phase, so it is tested against a real socket rather than a stub: a local
+`HttpListener` checks that the request really asks for `application/chargy`, that a
+service answering with that content type comes back marked as one with its answer
+attached, that anything else stays a bare URL, and that an unreachable service leaves
+the URL as it was — an EV driver whose link is down has not thereby failed their
+verification.
+
+Two defects surfaced, both mine. `IsAChargeTransparencyLiveLink` checked only the
+context while the structural validation sat in `TryParse`, so the published predicate
+answered a weaker question than upstream's. And `TryParse` rejected a `timestamp` that
+Newtonsoft had turned into a date on its own — the whole reason `ChargyLib.ParseJSON`
+exists (§7a) — which would have cost any caller who reached the public API with a plain
+`JObject.Parse` their live link. It now accepts a date token and renders it the way
+Chargy writes instants; nothing here is signed, so nothing depends on the original
+characters.
+
+**What ChargyCore.TS declares but does not implement**, and therefore has no
+counterpart to port:
+
+| Declared | State upstream |
+|---|---|
+| The three transports (`https`, `httpSSE`, `websocket`) | Data model only. No client connects to any of them — `grep` over `src/` finds the transport types nowhere but in the interface that declares them. |
+| `TOTPConfig` (`initialSharedSecret`, `timeStep`) | Data model only. No code computes a one-time password; the algorithm lives in the separate `DynamicQRCodes` repository. |
+
+Both are carried faithfully as data: a link's transports, their weighted endpoint
+lists and their TOTP configuration are read, kept and written back. Building an actual
+live-link client and a TOTP implementation would be **new functionality rather than a
+port**, and is a decision for the project rather than for this plan. Hermod already
+brings HTTP, SSE and WebSocket clients, so the cost would be modest — but a live-link
+client is also the first part of Chargy that would open a network connection on an EV
+driver's behalf, which deserves to be decided deliberately rather than inherited from
+a to-do list.
 
 ### Phase 6 — Polish & release ⬜
 XML documentation comments on the whole public surface, `README.md` with usage examples,
