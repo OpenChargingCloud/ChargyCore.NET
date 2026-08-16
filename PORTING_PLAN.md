@@ -781,6 +781,16 @@ person. Numbers are printed culture-invariantly: a reading written as `50,387945
 machine and `50.387945` on the next cannot be compared, pasted into a bug report or piped
 into anything.
 
+It is tested like anything else — `CommandLineTests` (18) and `ChargyVerifyTests` (15),
+added after the rest of Phase 6. Being a sample was not a reason to leave it out: the exit
+codes and the argument grammar are the only interface a script has, and "it is only an
+example" is exactly what nobody remembers once something depends on it. `Main` is called
+in process with the console redirected, which covers the parsing, the wiring of the
+detector, the report and the exit code — everything except the packaging of the
+executable. Both exit-1 flavours are pinned separately, because they mean different
+things: a record that was read and is not proven, and a record whose signature was
+altered — the second one says so in words rather than merely withholding "verified".
+
 **The README** gained a usage section, the command line section, and corrected status
 tables — they still claimed Phase 4 was in progress and OCMF was next.
 

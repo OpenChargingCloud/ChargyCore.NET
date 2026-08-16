@@ -30,6 +30,10 @@
   <ItemGroup>
     <ProjectReference Include="..\ChargyCore\ChargyCore.csproj" />
     <ProjectReference Include="..\ChargyCore.QRCodes\ChargyCore.QRCodes.csproj" />
+    <!-- The command line verifier is a sample, but it is also the only place
+         where exit codes, argument parsing and the printed report exist, and
+         those are an interface somebody's script depends on. -->
+    <ProjectReference Include="..\ChargyVerify\ChargyVerify.csproj" />
   </ItemGroup>
 
 </Project>
