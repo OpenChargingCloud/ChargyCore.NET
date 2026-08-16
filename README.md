@@ -332,18 +332,11 @@ ML-DSA-87.
 
 `dotnet pack` on the two library projects produces `cloud.charging.open.chargy` and
 `cloud.charging.open.chargy.qrcodes`, each with the XML documentation, this README and
-a `.snupkg` of debug symbols, and CI builds them on every commit so that a broken
-package description is found here rather than on release day. Project by project
-rather than solution-wide, because Styx and Hermod are in the solution as well and
-packing them here would publish other people's projects out of this build.
+a `.snupkg` of debug symbols. Project by project rather than solution-wide, because
+Styx and Hermod are in the solution as well.
 
-They are **not published to nuget.org yet**, and cannot be until Styx and Hermod are:
-a package that depends on assemblies nobody can download is a package nobody can
-install. Two things have to be settled first — Hermod has no package on nuget.org at
-all, and the id `Styx` there belongs to an unrelated project, so Styx would have to be
-published under a distinct id such as `org.GraphDefined.Vanaheimr.Styx`. Until then,
-consume ChargyCore.NET as a project reference, exactly as this repository's own CI
-does.
+ChargyCore.NET is consumed as a project reference, exactly as this repository's own CI
+does, and as Hermod itself consumes Styx.
 
 
 ### Verification report parity

@@ -762,23 +762,11 @@ into anything.
 **The README** gained a usage section, the command line section, and corrected status
 tables — they still claimed Phase 4 was in progress and OCMF was next.
 
-**Packaging** works and is exercised by CI on every commit, but the packages are
-**not publishable yet**, for a reason worth stating plainly:
-
-| Dependency | State on nuget.org |
-|---|---|
-| Hermod | No package at all. |
-| Styx | The id `Styx` belongs to an unrelated project — a websocket framework by ReactiveMarkets, versions 0.9.x. |
-
-A package depending on assemblies nobody can download is a package nobody can install,
-and the second row is the worse of the two: publishing as it stands would emit a
-dependency on `Styx 1.0.0`, and the id it names is somebody else's. Styx would have to be
-published under a distinct id such as `org.GraphDefined.Vanaheimr.Styx`. Until both are
-settled, ChargyCore.NET is consumed as a project reference, exactly as its own CI does.
-CI packs anyway, so that a broken package description is found on the commit that broke
-it rather than on release day — and packs the two library projects individually rather
-than the solution, because Styx and Hermod are in the solution too and packing them here
-would publish other people's projects out of this build.
+**Packaging** works: the two library projects pack with their documentation, the README
+and a symbol package, and CI builds them as artifacts. Individually rather than
+solution-wide, because Styx and Hermod are in the solution too. ChargyCore.NET is
+consumed as a project reference, exactly as its own CI does and as Hermod consumes
+Styx.
 
 ---
 

@@ -63,13 +63,9 @@ jobs:
           name: test-results
           path: ChargyCore.NET/artifacts/**/*.trx
 
-      # Not published anywhere: Styx and Hermod are not on nuget.org, so the
-      # packages this produces cannot be installed from a public feed yet (see
-      # the README). Packing anyway keeps the metadata honest — a broken
-      # package description is found here rather than on release day.
       # Project by project rather than the whole solution: Styx and Hermod are in
-      # the solution too, and packing them here would publish other people's
-      # projects out of this repository's build.
+      # the solution too, and packing them here would build other people's
+      # projects into this repository's artifacts.
       - name: Pack
         working-directory: ChargyCore.NET
         run: |
