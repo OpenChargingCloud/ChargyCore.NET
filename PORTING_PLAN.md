@@ -1010,12 +1010,14 @@ had looked since.
   normalising both sides before it looks (`ChargyCoreTests/AChargyTests.cs:224`).
 
   What this port did not have was the leg that caught the bug — CI ran on
-  `ubuntu-latest` alone. It now runs on both, `fail-fast: false` so that a red
-  Windows leg cannot cancel Linux or the other way round, which is precisely the
-  situation upstream was in. Ahead of the build, both legs hash every tracked file on
-  disk with the filters switched off and compare it against the blob the repository
-  holds: asking git for a diff would apply the very filter under suspicion to both
-  sides and always come back clean.
+  `ubuntu-latest` alone. It now runs the same two legs as the Styx and Hermod gates:
+  **Windows and Debian 13**, the latter in a `debian:13` container on an Ubuntu
+  runner, because Debian is what this code runs on in production and GitHub offers no
+  Debian image. `fail-fast: false`, so that a red Windows leg cannot cancel Linux or
+  the other way round — which is precisely the situation upstream was in. Ahead of the
+  build, both legs hash every tracked file on disk with the filters switched off and
+  compare it against the blob the repository holds: asking git for a diff would apply
+  the very filter under suspicion to both sides and always come back clean.
 
   The non-fixture files are measured too, as the control that decides whether the
   fixture result means anything, and the first Windows run answered that question

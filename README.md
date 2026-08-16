@@ -322,13 +322,17 @@ The build settings and the package metadata shared by every project live in
 [`Directory.Build.props`](Directory.Build.props). `GenerateDocumentationFile` is on, so
 an undocumented public member is a warning, and the build runs warning-free.
 
-CI builds and tests on Linux **and** Windows. Windows is there for a specific reason: the
-test fixtures are signed charge transparency records, so their bytes are what is under
-test, and a Windows checkout rewrites line endings by default.
-[`.gitattributes`](.gitattributes) prevents that, and the Windows leg is what proves it —
-before building, every tracked file on disk is compared against the bytes the repository
-holds. The GitHub Windows image runs with `core.autocrlf=true` and does rewrite 197 of the
-repository's other files; all 204 fixtures come through untouched.
+CI builds and tests on **Debian 13** and **Windows**, the same two legs as
+[Styx](https://github.com/Vanaheimr/Styx) and [Hermod](https://github.com/Vanaheimr/Hermod)
+— Debian because that is what this code runs on in production, in a `debian:13` container
+since GitHub offers no Debian runner image.
+
+Windows is there for a specific reason: the test fixtures are signed charge transparency
+records, so their bytes are what is under test, and a Windows checkout rewrites line
+endings by default. [`.gitattributes`](.gitattributes) prevents that, and the Windows leg
+is what proves it — before building, every tracked file on disk is compared against the
+bytes the repository holds. The GitHub Windows image runs with `core.autocrlf=true` and
+does rewrite 197 of the repository's other files; all 204 fixtures come through untouched.
 
 All cryptography is provided by [BouncyCastle](https://www.bouncycastle.org/) — ECDSA over
 secp192k1, secp192r1, secp224k1, secp256k1, secp256r1, secp384r1 and secp521r1, plus the
