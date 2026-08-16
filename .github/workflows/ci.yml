@@ -59,13 +59,31 @@ jobs:
         shell: bash
         working-directory: ChargyCore.NET
         run: |
-          git ls-files    -- ChargyCoreTests/TestData                    > ../fixture-paths.txt
-          git ls-files -s -- ChargyCoreTests/TestData | awk '{print $2}' > ../fixture-index.sha
-          git hash-object --no-filters --stdin-paths < ../fixture-paths.txt > ../fixture-ondisk.sha
-          paste ../fixture-paths.txt ../fixture-index.sha ../fixture-ondisk.sha |
+          echo "core.autocrlf: $(git config --get core.autocrlf || echo 'unset')"
+
+          git ls-files                       > ../paths.txt
+          git ls-files -s | awk '{print $2}' > ../index.sha
+          git hash-object --no-filters --stdin-paths < ../paths.txt > ../ondisk.sha
+
+          # Every tracked file is measured, not only the fixtures. The fixtures
+          # decide the step; the rest is the control that gives the verdict its
+          # meaning — on a runner that converts nothing, "no fixture was altered"
+          # would be true no matter what .gitattributes said.
+          paste ../paths.txt ../index.sha ../ondisk.sha |
           awk -F'\t' '
-              $2 != $3 { print "::error file=ChargyCore.NET/" $1 "::checked out with other bytes than the repository holds"; altered++ }
-              END      { printf "%d fixtures checked, %d altered by the checkout\n", NR, altered; exit altered ? 1 : 0 }'
+              $1 ~ /^ChargyCoreTests\/TestData\// {
+                  fixtures++
+                  if ($2 != $3) { print "::error file=ChargyCore.NET/" $1 "::checked out with other bytes than the repository holds"; altered++ }
+                  next
+              }
+              $2 != $3 { converted++ }
+              END {
+                  printf "%d fixtures checked, %d altered by the checkout\n", fixtures, altered
+                  printf "%d of the %d other tracked files were rewritten on checkout\n", converted, NR - fixtures
+                  if (converted == 0)
+                      print "note: this runner converts nothing at all, so the fixture result above is not evidence on its own"
+                  exit altered ? 1 : 0
+              }'
 
       - name: Restore
         working-directory: ChargyCore.NET
