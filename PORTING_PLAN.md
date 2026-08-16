@@ -350,6 +350,7 @@ as a hard, automatically-checked contract — not a hope.
 | `SimpleURLs` | `IO/SimpleURLTests` | 7 → 9 |
 | `ChargeTransparencyLiveLink` | `ChargeTransparencyLiveLinkTests` | 3 → 4 |
 | `ChargePoint`, `EMHCrypt01`, `OCMFVersions`, `SAFE_withChargyExtensions` | … | 6 each |
+| `OCMFSessionIdentity` | `Formats/OCMFSessionIdentityTests` | 6 → 7 |
 | `PublicKeyFiles` | … | 5 |
 | `EDL40`, `OCMFTariffText` | `Formats/OCMFTariffTextTests` | 4 each |
 | `OCMF`, `chargyInterfaces` | … | 3 each |
@@ -441,6 +442,19 @@ infrastructure. Every step is a self-contained increment: format + its `ACrypt` 
    **by instant, not lexically**, because the timestamps keep the meter's own UTC offset.
    Documents are grouped by their session identity and only the first group becomes a
    record, which is what keeps two drivers on one meter from being merged into one bill.
+
+   That correction is now pinned by `OCMFSessionIdentityTests`, ported later than the
+   rest: the identity has to survive rewritten line endings, and — a step further than
+   upstream tests it — reformatting the signed payload itself. That last one is the
+   mechanism rather than a symptom, and it makes the independence explicit: reformatting
+   *does* break the signature, which covers the payload character for character, and a
+   record can stop verifying without becoming a different charging session.
+
+   Writing it turned up that `OCMF-DZG-01.ocmf` holds **two** concatenated documents, so
+   splitting an OCMF file on its separator is only unambiguous for a single-document
+   one. The scanner never had this problem — it tracks JSON nesting rather than
+   counting separators — but a test that did it naively passed a truncated document to
+   the parser and blamed the identity for changing.
 
    The remaining OCMF sub-features were pulled in afterwards, see step 10.
 3. **EMH + EDL40 (SML)** ✅ **done** → `EMHCrypt01Tests` (6), `EDL40Tests` (12).
