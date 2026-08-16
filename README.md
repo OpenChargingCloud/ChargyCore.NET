@@ -331,9 +331,15 @@ holds. The GitHub Windows image runs with `core.autocrlf=true` and does rewrite 
 repository's other files; all 204 fixtures come through untouched.
 
 All cryptography is provided by [BouncyCastle](https://www.bouncycastle.org/) — ECDSA over
-secp192r1, secp224k1, secp256k1, secp256r1, secp384r1 and secp521r1; Ed25519, Ed25519ctx,
-Ed25519ph, Ed448 and Ed448ph; and the FIPS 204 parameter sets ML-DSA-44, ML-DSA-65 and
-ML-DSA-87.
+secp192k1, secp192r1, secp224k1, secp256k1, secp256r1, secp384r1 and secp521r1, plus the
+RFC 5639 curves brainpoolP256r1 and brainpoolP384r1 — which OCMF names without their "P";
+Ed25519, Ed25519ctx, Ed25519ph, Ed448 and Ed448ph; and the FIPS 204 parameter sets
+ML-DSA-44, ML-DSA-65 and ML-DSA-87.
+
+Every ECDSA algorithm OCMF names can therefore be checked. Two of them, `brainpool384r1`
+paired with SHA-256 and `secp384r1` paired with SHA-256, use a digest that does not match
+their curve — but meters were built that way and signed real charging sessions with it, so
+Chargy verifies them exactly as they were signed rather than "correcting" anything.
 
 
 ### Packaging

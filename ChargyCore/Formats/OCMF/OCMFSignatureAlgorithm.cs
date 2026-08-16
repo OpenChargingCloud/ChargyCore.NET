@@ -29,7 +29,7 @@ namespace cloud.charging.open.chargy.Formats.OCMF
     /// signed, so this must never be "corrected".
     /// </summary>
     /// <param name="Name">The OCMF name of the algorithm.</param>
-    /// <param name="CurveName">The SEC name of the elliptic curve, for the ECDSA algorithms.</param>
+    /// <param name="CurveName">The name of the elliptic curve, for the ECDSA algorithms, as its defining standard spells it.</param>
     /// <param name="HashName">The digest applied before signing, or null when the message is signed directly.</param>
     /// <param name="HashDescription">How the hash is described in a verification trace.</param>
     /// <param name="SignsMessageDirectly">
@@ -54,7 +54,7 @@ namespace cloud.charging.open.chargy.Formats.OCMF
         /// <summary>The OCMF name of the algorithm.</summary>
         public String   Name                    { get; } = Name;
 
-        /// <summary>The SEC name of the elliptic curve, for the ECDSA algorithms.</summary>
+        /// <summary>The name of the elliptic curve, for the ECDSA algorithms.</summary>
         public String?  CurveName               { get; } = CurveName;
 
         /// <summary>The digest applied before signing.</summary>
@@ -79,40 +79,48 @@ namespace cloud.charging.open.chargy.Formats.OCMF
         /// A null curve means Chargy recognises the algorithm but cannot verify
         /// it, which is reported as an unsupported curve rather than as a bad
         /// signature — the difference between "this library cannot check this"
-        /// and "this charging session is not what it claims".
+        /// and "this charging session is not what it claims". Only the algorithms
+        /// that sign the message directly have a null curve now; every ECDSA entry
+        /// names a curve this port can check.
         ///
-        /// The two secp192 curves are a deliberate difference from ChargyCore.TS,
-        /// which leaves them unverifiable because its JavaScript curve library
-        /// does not carry them. BouncyCastle does, so this port verifies them
-        /// rather than declining to look. A charging session signed on secp192r1
-        /// is checkable here and is reported as unverifiable there; nothing that
-        /// verifies in one implementation fails in the other.
+        /// The two secp192 curves and the two brainpool curves are a deliberate
+        /// difference from ChargyCore.TS, which leaves all four unverifiable
+        /// because its JavaScript curve library does not carry them. BouncyCastle
+        /// does, so this port verifies them rather than declining to look. A
+        /// charging session signed on brainpoolP256r1 is checkable here and is
+        /// reported as unverifiable there; nothing that verifies in one
+        /// implementation fails in the other.
+        ///
+        /// The curve names are spelled as RFC 5639 and the object identifier
+        /// registry spell them, not as OCMF does: OCMF drops the "P" from
+        /// "brainpoolP256r1". The name here has to be the one the verifier can
+        /// resolve, and it is the one a parsed public key will report as well.
         /// </summary>
         private static readonly OCMFSignatureAlgorithm[] known = [
 
             // The OCMF standard algorithms.
-            new ("ECDSA-secp256r1-SHA256",       "secp256r1",  "SHA256",  "SHA256"),
-            new ("ECDSA-secp192k1-SHA256",       "secp192k1",  "SHA256",  "SHA256"),
-            new ("ECDSA-secp192r1-SHA256",       "secp192r1",  "SHA256",  "SHA256, 256 Bits, hex"),
-            new ("ECDSA-secp256k1-SHA256",       "secp256k1",  "SHA256",  "SHA256, 256 Bits, hex"),
-            new ("ECDSA-brainpool256r1-SHA256",  null,         "SHA256",  "SHA256, 256 Bits, hex"),
+            new ("ECDSA-secp256r1-SHA256",       "secp256r1",        "SHA256",  "SHA256"),
+            new ("ECDSA-secp192k1-SHA256",       "secp192k1",        "SHA256",  "SHA256"),
+            new ("ECDSA-secp192r1-SHA256",       "secp192r1",        "SHA256",  "SHA256, 256 Bits, hex"),
+            new ("ECDSA-secp256k1-SHA256",       "secp256k1",        "SHA256",  "SHA256, 256 Bits, hex"),
+            new ("ECDSA-brainpool256r1-SHA256",  "brainpoolP256r1",  "SHA256",  "SHA256, 256 Bits, hex"),
 
             // Cryptographically the wrong digest for the curve — but meters were
             // built this way, so their signatures have to keep verifying.
-            new ("ECDSA-secp384r1-SHA256",       "secp384r1",  "SHA256",  "SHA256, 256 Bits, hex"),
-            new ("ECDSA-brainpool384r1-SHA256",  null,         "SHA256",  "SHA256, 256 Bits, hex"),
+            new ("ECDSA-secp384r1-SHA256",       "secp384r1",        "SHA256",  "SHA256, 256 Bits, hex"),
+            new ("ECDSA-brainpool384r1-SHA256",  "brainpoolP384r1",  "SHA256",  "SHA256, 256 Bits, hex"),
 
             // Not part of the OCMF standard, but in use.
-            new ("ECDSA-secp384r1-SHA384",       "secp384r1",  "SHA384",  "SHA384, 384 Bits, hex"),
-            new ("ECDSA-brainpool384r1-SHA384",  null,         "SHA384",  "SHA384, 384 Bits, hex"),
-            new ("ECDSA-secp521r1-SHA512",       "secp521r1",  "SHA512",  "SHA512, 512 Bits, hex"),
+            new ("ECDSA-secp384r1-SHA384",       "secp384r1",        "SHA384",  "SHA384, 384 Bits, hex"),
+            new ("ECDSA-brainpool384r1-SHA384",  "brainpoolP384r1",  "SHA384",  "SHA384, 384 Bits, hex"),
+            new ("ECDSA-secp521r1-SHA512",       "secp521r1",        "SHA512",  "SHA512, 512 Bits, hex"),
 
             // These sign the payload itself, with no separate digest step.
-            new ("EdDSA-Ed25519",                null,         null,      "none; message signed directly", SignsMessageDirectly: true, SuiteName: "Ed25519"),
-            new ("EdDSA-Ed448",                  null,         null,      "none; message signed directly", SignsMessageDirectly: true, SuiteName: "Ed448"),
-            new ("ML-DSA-44",                    null,         null,      "none; message signed directly", SignsMessageDirectly: true),
-            new ("ML-DSA-65",                    null,         null,      "none; message signed directly", SignsMessageDirectly: true),
-            new ("ML-DSA-87",                    null,         null,      "none; message signed directly", SignsMessageDirectly: true)
+            new ("EdDSA-Ed25519",                null,               null,      "none; message signed directly", SignsMessageDirectly: true, SuiteName: "Ed25519"),
+            new ("EdDSA-Ed448",                  null,               null,      "none; message signed directly", SignsMessageDirectly: true, SuiteName: "Ed448"),
+            new ("ML-DSA-44",                    null,               null,      "none; message signed directly", SignsMessageDirectly: true),
+            new ("ML-DSA-65",                    null,               null,      "none; message signed directly", SignsMessageDirectly: true),
+            new ("ML-DSA-87",                    null,               null,      "none; message signed directly", SignsMessageDirectly: true)
 
         ];
 
@@ -121,6 +129,12 @@ namespace cloud.charging.open.chargy.Formats.OCMF
         /// </summary>
         public static OCMFSignatureAlgorithm Default
             => known[0];
+
+        /// <summary>
+        /// Every signature algorithm OCMF documents have been seen to use.
+        /// </summary>
+        public static IReadOnlyList<OCMFSignatureAlgorithm> All
+            => known;
 
         #endregion
 

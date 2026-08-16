@@ -193,6 +193,17 @@ namespace cloud.charging.open.chargy.Crypto
         /// <summary>NIST/ANSI X9.62 secp521r1, also known as P-521.</summary>
         public static readonly ECCurveVerifier secp521r1  = new ("secp521r1", "SHA-512");
 
+        /// <summary>
+        /// RFC 5639 brainpoolP256r1, which OCMF names "brainpool256r1".
+        ///
+        /// A curve of the same size as secp256r1 but with verifiably pseudo-random
+        /// parameters, which is why German and European equipment reaches for it.
+        /// </summary>
+        public static readonly ECCurveVerifier brainpoolP256r1  = new ("brainpoolP256r1", "SHA-256");
+
+        /// <summary>RFC 5639 brainpoolP384r1, which OCMF names "brainpool384r1".</summary>
+        public static readonly ECCurveVerifier brainpoolP384r1  = new ("brainpoolP384r1", "SHA-384");
+
         #endregion
 
         #region Properties
@@ -243,6 +254,11 @@ namespace cloud.charging.open.chargy.Crypto
         /// same curves P-256 and friends, and Chargy's own key parser names a key
         /// after the *algorithm* it belongs to. All of them are accepted, because
         /// which spelling a file happened to use says nothing about the curve.
+        ///
+        /// The brainpool curves are the sharpest case of that: OCMF writes
+        /// "brainpool256r1" while RFC 5639, BouncyCastle and the object identifier
+        /// registry all write "brainpoolP256r1". One dropped letter, and a
+        /// perfectly checkable charging session would go unverified.
         /// </summary>
         /// <param name="CurveName">The name of an elliptic curve, or of an algorithm on one.</param>
         public static ECCurveVerifier? TryGet(String? CurveName)
@@ -256,6 +272,9 @@ namespace cloud.charging.open.chargy.Crypto
                    "secp256r1" or "p256" or "p-256" or "prime256v1" or "ecdsa-p256"  => secp256r1,
                    "secp384r1" or "p384" or "p-384" or "ecdsa-p384"                  => secp384r1,
                    "secp521r1" or "p521" or "p-521" or "ecdsa-p521"                  => secp521r1,
+
+                   "brainpool256r1" or "brainpoolp256r1"                             => brainpoolP256r1,
+                   "brainpool384r1" or "brainpoolp384r1"                             => brainpoolP384r1,
 
                    _                                                                 => null
 

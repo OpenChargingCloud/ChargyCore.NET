@@ -118,26 +118,40 @@ namespace cloud.charging.open.chargy.tests.Formats
         /// perfectly good record as broken because of a gap in the verifier
         /// would be the worst answer available. The detail names the curve, so
         /// that whoever reads the bug report knows what is missing.
+        ///
+        /// The situation has to be built by hand now. It used to be reached by
+        /// claiming "ECDSA-brainpool256r1-SHA256", which this port could not
+        /// check either — since the brainpool curves landed, no algorithm in the
+        /// OCMF table is unverifiable, and `OCMFBrainpoolTests` keeps it that
+        /// way. The branch stays, because the next curve OCMF names will arrive
+        /// before its verifier does, and this is the answer it has to get.
         /// </summary>
         [Test]
         public void ACurveChargyCannotCheckIsNotABadSignature()
         {
 
-            var result = new OCMFFormat(I18NDictionary.Default()).TryParse(
-                             [ WithSignatureAlgorithm("ECDSA-brainpool256r1-SHA256") ],
+            var document = new OCMFDocumentScanner().
+                               Scan([ ReadTextFixture("OCMF/OCMF-Testdata-01.ocmf").Trim() ]).
+                               Documents[0];
+
+            document.SignatureAlgorithm = new OCMFSignatureAlgorithm(
+                                              "ECDSA-someFutureCurve-SHA256",
+                                              "someFutureCurve",
+                                              "SHA256",
+                                              "SHA256, 256 Bits, hex"
+                                          );
+
+            var status = new OCMFSignatureValidator(I18NDictionary.Default()).Validate(
+                             document,
                              ReadTextFixture("OCMF/OCMF-Testdata-01_publicKey.txt").Trim(),
-                             "hex",
-                             null
+                             "hex"
                          );
 
-            Assert.That(result, Is.InstanceOf<OCMFChargeTransparencyRecord>(), VerificationReport.Format(result));
-
-            var value = ((OCMFChargeTransparencyRecord) result).ChargingSessions[0].Measurements[0].Values[0];
-            var error = value.Result?.Errors.FirstOrDefault();
+            var error  = document.Errors.FirstOrDefault();
 
             Assert.Multiple(() => {
 
-                Assert.That(value.Result?.Status,  Is.EqualTo(VerificationResult.InvalidPublicKey));
+                Assert.That(status,                Is.EqualTo(VerificationResult.InvalidPublicKey));
 
                 Assert.That(error,                 Is.Not.Null);
                 Assert.That(error?.Code,           Is.EqualTo("Verification_PublicKeyDecodingFailed"));
@@ -146,7 +160,7 @@ namespace cloud.charging.open.chargy.tests.Formats
 
                 // ..., and here there is a technical detail, because here
                 // something technical is missing.
-                Assert.That(error?.Details,        Is.EqualTo("Unsupported ECC curve 'ECDSA-brainpool256r1-SHA256'!"));
+                Assert.That(error?.Details,        Is.EqualTo("Unsupported ECC curve 'ECDSA-someFutureCurve-SHA256'!"));
 
             });
 

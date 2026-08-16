@@ -17,18 +17,6 @@
 
 #region Usings
 
-using System.Security.Cryptography;
-using System.Text;
-
-using Org.BouncyCastle.Asn1;
-using Org.BouncyCastle.Asn1.X9;
-using Org.BouncyCastle.Crypto;
-using Org.BouncyCastle.Crypto.Generators;
-using Org.BouncyCastle.Crypto.Parameters;
-using Org.BouncyCastle.Crypto.Signers;
-using Org.BouncyCastle.Security;
-using Org.BouncyCastle.X509;
-
 using cloud.charging.open.chargy.Formats.OCMF;
 
 #endregion
@@ -91,7 +79,7 @@ namespace cloud.charging.open.chargy.tests.Formats
             Assert.That(OCMFSignatureAlgorithm.TryGet(SA)?.CurveName,  Is.EqualTo(CurveName),
                         $"'{SA}' should name a curve this port can verify.");
 
-            var (publicKeyHEX, signatureHEX) = Sign(CurveName, payload);
+            var (publicKeyHEX, signatureHEX) = OCMFTestSigner.Sign(CurveName, payload);
 
             var document = scanner.Scan([ $"OCMF|{payload}|{{\"SD\":\"{signatureHEX}\",\"SA\":\"{SA}\"}}" ]).Documents[0];
 
@@ -117,7 +105,7 @@ namespace cloud.charging.open.chargy.tests.Formats
                                                              String  SA)
         {
 
-            var (publicKeyHEX, signatureHEX) = Sign(CurveName, payload);
+            var (publicKeyHEX, signatureHEX) = OCMFTestSigner.Sign(CurveName, payload);
 
             var tampered = payload.Replace("42.5", "43.5");
 
@@ -143,8 +131,8 @@ namespace cloud.charging.open.chargy.tests.Formats
         public void BothSecp192Curves_RejectAKeyFromTheOtherCurve()
         {
 
-            var (_,            signatureHEX) = Sign("secp192r1", payload);
-            var (wrongKeyHEX,  _)            = Sign("secp192k1", payload);
+            var (_,            signatureHEX) = OCMFTestSigner.Sign("secp192r1", payload);
+            var (wrongKeyHEX,  _)            = OCMFTestSigner.Sign("secp192k1", payload);
 
             var document = scanner.Scan([ $"OCMF|{payload}|{{\"SD\":\"{signatureHEX}\",\"SA\":\"ECDSA-secp192r1-SHA256\"}}" ]).Documents[0];
 
@@ -154,82 +142,6 @@ namespace cloud.charging.open.chargy.tests.Formats
         }
 
         #endregion
-
-        #region TheBrainpoolCurves_RemainUnverified()
-
-        /// <summary>
-        /// The brainpool curves stay as ChargyCore.TS leaves them.
-        ///
-        /// BouncyCastle carries them too, so this is a scope decision rather than
-        /// a limitation: only the secp192 pair was asked for. The test records
-        /// that, so that the next person does not read the gap as an oversight.
-        /// </summary>
-        [Test]
-        public void TheBrainpoolCurves_RemainUnverified()
-        {
-
-            Assert.Multiple(() => {
-                Assert.That(OCMFSignatureAlgorithm.TryGet("ECDSA-brainpool256r1-SHA256")?.CurveName,  Is.Null);
-                Assert.That(OCMFSignatureAlgorithm.TryGet("ECDSA-brainpool384r1-SHA256")?.CurveName,  Is.Null);
-                Assert.That(OCMFSignatureAlgorithm.TryGet("ECDSA-brainpool384r1-SHA384")?.CurveName,  Is.Null);
-            });
-
-        }
-
-        #endregion
-
-
-        #region (private, static) Sign(CurveName, Payload)
-
-        /// <summary>
-        /// Sign an OCMF payload the way a meter on the given curve would: the
-        /// public key as a DER SubjectPublicKeyInfo, the signature as DER over
-        /// the SHA-256 of the payload.
-        /// </summary>
-        /// <param name="CurveName">The name of an elliptic curve.</param>
-        /// <param name="Payload">The raw OCMF payload.</param>
-        private static (String PublicKeyHEX, String SignatureHEX) Sign(String  CurveName,
-                                                                       String  Payload)
-        {
-
-            var curveOID    = ECNamedCurveTable.GetOid(CurveName)
-                                  ?? throw new InvalidOperationException($"BouncyCastle does not know the curve '{CurveName}'!");
-
-            var curve       = ECNamedCurveTable.GetByOid(curveOID);
-
-            // Named domain parameters, not plain ones: a key built from plain
-            // parameters is written out with the whole curve spelled out inline,
-            // while a real energy meter names the curve by its object identifier.
-            // Signing with the wrong one would test a key shape nobody emits.
-            var domain      = new ECNamedDomainParameters(curveOID, curve);
-
-            var generator   = new ECKeyPairGenerator();
-            generator.Init(new ECKeyGenerationParameters(domain, new SecureRandom()));
-
-            var keyPair     = generator.GenerateKeyPair();
-
-            var signer      = new ECDsaSigner();
-            signer.Init(true, new ParametersWithRandom((ECPrivateKeyParameters) keyPair.Private, new SecureRandom()));
-
-            var hash        = SHA256.HashData(Encoding.UTF8.GetBytes(Payload));
-            var signature   = signer.GenerateSignature(hash);
-
-            var der         = new DerSequence(
-                                  new DerInteger(signature[0]),
-                                  new DerInteger(signature[1])
-                              ).GetDerEncoded();
-
-            var publicKey   = SubjectPublicKeyInfoFactory.CreateSubjectPublicKeyInfo(keyPair.Public).GetDerEncoded();
-
-            return (
-                       Convert.ToHexStringLower(publicKey),
-                       Convert.ToHexStringLower(der)
-                   );
-
-        }
-
-        #endregion
-
 
     }
 
