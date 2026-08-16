@@ -326,7 +326,9 @@ CI builds and tests on Linux **and** Windows. Windows is there for a specific re
 test fixtures are signed charge transparency records, so their bytes are what is under
 test, and a Windows checkout rewrites line endings by default.
 [`.gitattributes`](.gitattributes) prevents that, and the Windows leg is what proves it —
-before building, every fixture on disk is compared against the bytes the repository holds.
+before building, every tracked file on disk is compared against the bytes the repository
+holds. The GitHub Windows image runs with `core.autocrlf=true` and does rewrite 197 of the
+repository's other files; all 204 fixtures come through untouched.
 
 All cryptography is provided by [BouncyCastle](https://www.bouncycastle.org/) — ECDSA over
 secp192r1, secp224k1, secp256k1, secp256r1, secp384r1 and secp521r1; Ed25519, Ed25519ctx,

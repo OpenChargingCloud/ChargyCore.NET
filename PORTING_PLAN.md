@@ -1012,13 +1012,22 @@ had looked since.
   What this port did not have was the leg that caught the bug — CI ran on
   `ubuntu-latest` alone. It now runs on both, `fail-fast: false` so that a red
   Windows leg cannot cancel Linux or the other way round, which is precisely the
-  situation upstream was in. Ahead of the build, the Windows leg hashes every fixture
-  on disk with the filters switched off and compares it against the blob the
-  repository holds: asking git for a diff would apply the very filter under suspicion
-  to both sides and always come back clean. The check was tried in both directions
-  before it was trusted — in a `core.autocrlf=true` checkout all 204 fixtures match
-  while 110 of 110 source files do not, so it does detect a conversion and the green
-  answer means something.
+  situation upstream was in. Ahead of the build, both legs hash every tracked file on
+  disk with the filters switched off and compare it against the blob the repository
+  holds: asking git for a diff would apply the very filter under suspicion to both
+  sides and always come back clean.
+
+  The non-fixture files are measured too, as the control that decides whether the
+  fixture result means anything, and the first Windows run answered that question
+  outright: `core.autocrlf` is **`true`** on the GitHub Windows image, **197 of the
+  202 other tracked files were rewritten on checkout, and 0 of the 204 fixtures
+  were.** So the exposure upstream closed in `3ede921` is not hypothetical here
+  either — without `.gitattributes` the signed material would arrive altered on that
+  runner — and the leg reports a fact rather than performing a ritual. On Linux
+  nothing is converted at all, and the step says so in the log instead of letting a
+  green line imply more than it shows.
+
+  561 tests pass on both platforms.
 
 * **`77d1917`, `e4ab74e`, `c0ad03c`** — the inert `.npmignore` removed, the Noble
   stack moved to `@noble/curves` 2.3.0 together with `@noble/post-quantum` 0.7.0 so
