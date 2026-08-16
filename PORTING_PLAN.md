@@ -22,7 +22,7 @@ Source inventory of ChargyCore.TS:
 | Data model & helpers | `interfaces/*`, `ACrypt`, `SignatureCrypto`, `OCPI` | ~4,900 |
 | **Total source** | 34 files | **~23,600** |
 | Tests | 28 spec files | ~4,300 |
-| Test fixtures | 203 files, of which **25 are `*.expected.txt` golden reports** | — |
+| Test fixtures | 204 files, of which **25 are `*.expected.txt` golden reports** | — |
 
 Expected C# size: roughly 28,000–35,000 LOC, because the C# data model uses the
 GraphDefined house style (`ToJSON()` / `TryParse()` per class) instead of bare
@@ -145,7 +145,7 @@ ChargyCore.NET/
     ├── Formats/                        one test class per format
     ├── Containers/
     ├── Crypto/
-    └── TestData/                       all 203 fixtures copied 1:1
+    └── TestData/                       all 204 fixtures copied 1:1
 ```
 
 **Namespace / assembly:** `cloud.charging.open.chargy` (+ `.DataStructures`, `.Crypto`,
@@ -335,7 +335,7 @@ as a hard, automatically-checked contract — not a hope.
 
 * NUnit 4.6.1 + NUnit3TestAdapter 6.2.0 + Microsoft.NET.Test.Sdk 18.8.1 (identical to StyxTests)
 * `<Using Include="NUnit.Framework" />`
-* All 203 fixtures under `TestData/`, `CopyToOutputDirectory="PreserveNewest"`
+* All 204 fixtures under `TestData/`, `CopyToOutputDirectory="PreserveNewest"`
 * One `[TestFixture]` per TS spec file, ~151 test cases total:
 
 | TS spec | NUnit fixture | cases |
@@ -379,14 +379,15 @@ Git repo, AGPL `LICENSE`, `README.md`, `SECURITY.md`, `CONTRIBUTING.md`,
 `CODE_OF_CONDUCT.md`, `.gitignore`, `.gitattributes`, GitHub Actions workflow
 (`.github/workflows/ci.yml`, which checks out Styx and Hermod as siblings),
 `ChargyCore.slnx` + both `.csproj` files with the Hermod/Styx project references,
-`i18n.json` + `validationRules.json` as embedded resources, all 203 fixtures copied
-into `ChargyCoreTests/TestData/`.
+`i18n.json` + `validationRules.json` as embedded resources, all fixtures copied
+into `ChargyCoreTests/TestData/` — 203 of them at the time, 204 since the v0.12.0
+sync in `f3bab3c` (see §7b).
 
 Two additions over the original plan:
 
 * `ChargyResources` and `AChargyTests` were written already, so Phase 0 could ship
   **8 scaffolding tests** instead of an empty test run. They assert that the embedded
-  resources parse, that all 203 fixtures and all 25 golden reports reach the output
+  resources parse, that all 204 fixtures and all 25 golden reports reach the output
   directory, that binary fixtures survive byte-exactly (ZIP magic intact) and that the
   golden reports carry no CRLF. An empty green test run would have proven nothing.
 * `.gitattributes` marks `ChargyCoreTests/TestData/**` as `-text`. End-of-line
@@ -399,7 +400,7 @@ Two additions over the original plan:
 > Note: `TestData/dataStructures.ts` and `TestData/OCMF/versionTestData.ts` are
 > TypeScript *test data definitions*, not charge transparency fixtures. They are kept
 > as the reference for the C# table-driven fixtures written in Phase 1 and Phase 4,
-> and are part of the 203 files asserted above. `versionTestData.ts` is now mirrored
+> and are part of the 204 files asserted above. `versionTestData.ts` is now mirrored
 > by `ChargyCoreTests/Formats/OCMFVersionTestData.cs`, whose seeded generator is the
 > same one bit for bit — so both implementations are fed the same generated documents.
 
@@ -956,6 +957,71 @@ Baseline moved to `8d7735e`. No fixture data changed. What matters here:
   `0dab5cb`, `cbd16f6`, `8d7735e` — dependency, CI and README changes with no
   counterpart in this port.
 
+### `dbe61c0`…`3ede921` — the OCMF session identity, and a Windows checkout
+
+Baseline moved to `3ede921`, which is upstream v0.12.0 plus two follow-ups. Eight
+commits: two changed behaviour, one changed fixture data, one was answered here in
+its own way, and four are npm work with no counterpart. All of it has landed — this
+entry records where, because a register that stops at `8d7735e` reads as if nobody
+had looked since.
+
+* **`dbe61c0` — the session identifier and the time span** ✅ **ported** (`a079167`,
+  fixtures in `f3bab3c`). The charging session built from OCMF carried a hardcoded
+  `@id` that reached ten golden files with the same value, so the field identified
+  nothing; it is now `"OCMF-"` plus a SHA-256 over the documents. `begin` and `end`
+  were the literal `"?"` and are now the earliest and latest reading, **ordered by
+  instant rather than lexically**, because the timestamps keep the offset the meter
+  reported and would otherwise sort by their local reading. Substance in Phase 4
+  step 2.
+
+* **`456252f` — hashed over the canonical record, not over its text** ✅ **ported**
+  (`6f56f29`). Upstream's Windows CI leg had been red on every push since `dbe61c0`:
+  the id was hashed over the document text, the pretty-printed DZG fixture arrives
+  there with rewritten line endings, and the same record therefore got a different
+  identity. Not a Windows quirk but the wrong choice of input, which that platform
+  merely exposed — pretty-printed against minified would diverge on one machine just
+  as much. It now hashes `canonicalJSON({payload, signature})` per document, joined
+  by a newline, which is the canonical form signature verification had been using all
+  along. Upstream also removed a stray NUL byte from the old separator, which is why
+  the published identifiers could not be reproduced from the printed source.
+
+* **`1f3684e` — a real "IF" fixture instead of a duplicate** ✅ **carried**
+  (`f3bab3c`). `ocmf_withoutIF.xml` was a byte-identical copy of `ocmf.xml`, and the
+  intended pair was the wrong way round: the real BSM WS36A document carries no
+  identification flags, so it *is* the "without" case. The generated and separately
+  signed `ocmf_withIF.xml` supplies the branch no fixture had exercised. The fixture
+  set moves 203 → 204 files, which is the added generator script; the golden reports
+  stay at 25, since the expected file was renamed along with its fixture.
+  `ChargeITTests.TheIdentificationFlagsReachTheRecord` asserts both directions,
+  because the verification report does not list the flags and would not have covered
+  them.
+
+* **`7b7145a` — the OCPI container merge** ✅ **done** (`9da4dd5`), see Phase 4
+  step 9.
+
+* **`3ede921` — line endings pinned** — already covered here, differently, and since
+  Phase 0 (`47c86c7`, a day earlier). Upstream normalises the whole repository
+  (`* text=auto eol=lf`) and then lists the binary exceptions; this port marks the
+  entire `ChargyCoreTests/TestData/**` tree `-text`, so no heuristic reaches a signed
+  fixture at all. Verified rather than assumed, the way upstream verified its own: a
+  worktree checked out with `core.autocrlf=true` yields every fixture byte for byte —
+  `ocmf.xml` 2058 bytes either way, the golden reports unchanged — while `.cs` and
+  `.md` do pick up CRLF, which nothing here depends on, the golden comparison
+  normalising both sides before it looks (`ChargyCoreTests/AChargyTests.cs:224`).
+
+  What this port does not have is the leg that caught the bug: CI is `ubuntu-latest`
+  only. The identity cannot drift again now that it is canonical, but a Windows job
+  is the cheap way to keep that a fact rather than a belief. Open point, not a defect.
+
+* **`77d1917`, `e4ab74e`, `c0ad03c`** — the inert `.npmignore` removed, the Noble
+  stack moved to `@noble/curves` 2.3.0 together with `@noble/post-quantum` 0.7.0 so
+  that every copy deduplicates, and release 0.12.0. No counterpart: the cryptography
+  here is BouncyCastle and the packaging is NuGet. One habit is worth taking over
+  regardless — upstream keeps a `CHANGELOG.md`, and this port does not yet.
+
+All 204 fixtures are byte-identical with upstream again, file names and checksums
+compared across both trees.
+
 ---
 
 ## 7c. Known limitations of this port
@@ -1049,6 +1115,13 @@ a deviation has to be maintained forever, an upstream fix does not.
   every meter seen so far names the curve, and an unreadable key shape is reported
   honestly rather than guessed at, so this is not urgent — but it is a real gap and
   was found by accident while testing the secp192 curves.
+
+* **Two pieces of repository hygiene upstream has and this port does not** (§7b, the
+  `dbe61c0`…`3ede921` batch): CI runs on `ubuntu-latest` alone, so the Windows leg
+  that exposed the OCMF identity bug over there has no counterpart here, and there is
+  no `CHANGELOG.md`. Neither changes what the library computes, which is why they are
+  listed here rather than scheduled — but the Windows job is what would keep the
+  line-ending pinning a verified fact instead of a belief.
 
 * **Existing prior art** — `VanaheimrElectric/libs/WWCP_OCPP/WWCP_OCPP_Common/Chargy/`
   holds a small (~700 LOC) partial Chargy port (`ChargyLib`, `ACrypt`, `EMHCrypt01`,
