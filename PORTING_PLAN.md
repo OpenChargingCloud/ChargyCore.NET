@@ -1009,9 +1009,16 @@ had looked since.
   `.md` do pick up CRLF, which nothing here depends on, the golden comparison
   normalising both sides before it looks (`ChargyCoreTests/AChargyTests.cs:224`).
 
-  What this port does not have is the leg that caught the bug: CI is `ubuntu-latest`
-  only. The identity cannot drift again now that it is canonical, but a Windows job
-  is the cheap way to keep that a fact rather than a belief. Open point, not a defect.
+  What this port did not have was the leg that caught the bug — CI ran on
+  `ubuntu-latest` alone. It now runs on both, `fail-fast: false` so that a red
+  Windows leg cannot cancel Linux or the other way round, which is precisely the
+  situation upstream was in. Ahead of the build, the Windows leg hashes every fixture
+  on disk with the filters switched off and compares it against the blob the
+  repository holds: asking git for a diff would apply the very filter under suspicion
+  to both sides and always come back clean. The check was tried in both directions
+  before it was trusted — in a `core.autocrlf=true` checkout all 204 fixtures match
+  while 110 of 110 source files do not, so it does detect a conversion and the green
+  answer means something.
 
 * **`77d1917`, `e4ab74e`, `c0ad03c`** — the inert `.npmignore` removed, the Noble
   stack moved to `@noble/curves` 2.3.0 together with `@noble/post-quantum` 0.7.0 so
@@ -1116,12 +1123,9 @@ a deviation has to be maintained forever, an upstream fix does not.
   honestly rather than guessed at, so this is not urgent — but it is a real gap and
   was found by accident while testing the secp192 curves.
 
-* **Two pieces of repository hygiene upstream has and this port does not** (§7b, the
-  `dbe61c0`…`3ede921` batch): CI runs on `ubuntu-latest` alone, so the Windows leg
-  that exposed the OCMF identity bug over there has no counterpart here, and there is
-  no `CHANGELOG.md`. Neither changes what the library computes, which is why they are
-  listed here rather than scheduled — but the Windows job is what would keep the
-  line-ending pinning a verified fact instead of a belief.
+* **No `CHANGELOG.md`.** Upstream keeps one and this port does not. It changes nothing
+  the library computes, which is why it is listed rather than scheduled. (The other
+  half of this point, the missing Windows CI leg, is done — see §7b.)
 
 * **Existing prior art** — `VanaheimrElectric/libs/WWCP_OCPP/WWCP_OCPP_Common/Chargy/`
   holds a small (~700 LOC) partial Chargy port (`ChargyLib`, `ACrypt`, `EMHCrypt01`,

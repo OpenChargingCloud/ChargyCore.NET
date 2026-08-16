@@ -11,7 +11,17 @@ jobs:
 
   build:
 
-    runs-on: ubuntu-latest
+    # Windows is not a second opinion on the same run. It is the platform whose
+    # default checkout rewrites line endings, and the fixtures here are signed
+    # charge transparency records whose bytes are the thing under test. Upstream
+    # ChargyCore.TS had exactly one leg go red for a week over this, and it was
+    # this one.
+    strategy:
+      fail-fast: false                       # a red Windows leg must not cancel Linux, and the reverse
+      matrix:
+        os: [ ubuntu-latest, windows-latest ]
+
+    runs-on: ${{ matrix.os }}
 
     steps:
 
@@ -39,6 +49,24 @@ jobs:
         with:
           dotnet-version: '10.0.x'
 
+      # .gitattributes marks the whole TestData tree as "-text" so that no
+      # end-of-line heuristic can reach a signed fixture. This is what says so
+      # rather than assuming it: the file on disk is hashed with the filters
+      # switched off and compared against the blob the repository holds, which
+      # is the one comparison a conversion cannot hide from — asking git for a
+      # diff would apply the very filter under suspicion to both sides.
+      - name: Fixtures arrived byte for byte
+        shell: bash
+        working-directory: ChargyCore.NET
+        run: |
+          git ls-files    -- ChargyCoreTests/TestData                    > ../fixture-paths.txt
+          git ls-files -s -- ChargyCoreTests/TestData | awk '{print $2}' > ../fixture-index.sha
+          git hash-object --no-filters --stdin-paths < ../fixture-paths.txt > ../fixture-ondisk.sha
+          paste ../fixture-paths.txt ../fixture-index.sha ../fixture-ondisk.sha |
+          awk -F'\t' '
+              $2 != $3 { print "::error file=ChargyCore.NET/" $1 "::checked out with other bytes than the repository holds"; altered++ }
+              END      { printf "%d fixtures checked, %d altered by the checkout\n", NR, altered; exit altered ? 1 : 0 }'
+
       - name: Restore
         working-directory: ChargyCore.NET
         run: dotnet restore ChargyCore.slnx
@@ -60,19 +88,24 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: test-results
+          name: test-results-${{ matrix.os }}
           path: ChargyCore.NET/artifacts/**/*.trx
 
       # Project by project rather than the whole solution: Styx and Hermod are in
       # the solution too, and packing them here would build other people's
       # projects into this repository's artifacts.
+      #
+      # One leg packs. The packages are platform independent, and two legs
+      # producing them would only raise the question which of the two shipped.
       - name: Pack
+        if: matrix.os == 'ubuntu-latest'
         working-directory: ChargyCore.NET
         run: |
           dotnet pack ChargyCore/ChargyCore.csproj                 --configuration Release --no-build --output artifacts/packages
           dotnet pack ChargyCore.QRCodes/ChargyCore.QRCodes.csproj --configuration Release --no-build --output artifacts/packages
 
       - name: Upload packages
+        if: matrix.os == 'ubuntu-latest'
         uses: actions/upload-artifact@v4
         with:
           name: packages

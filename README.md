@@ -322,6 +322,12 @@ The build settings and the package metadata shared by every project live in
 [`Directory.Build.props`](Directory.Build.props). `GenerateDocumentationFile` is on, so
 an undocumented public member is a warning, and the build runs warning-free.
 
+CI builds and tests on Linux **and** Windows. Windows is there for a specific reason: the
+test fixtures are signed charge transparency records, so their bytes are what is under
+test, and a Windows checkout rewrites line endings by default.
+[`.gitattributes`](.gitattributes) prevents that, and the Windows leg is what proves it —
+before building, every fixture on disk is compared against the bytes the repository holds.
+
 All cryptography is provided by [BouncyCastle](https://www.bouncycastle.org/) — ECDSA over
 secp192r1, secp224k1, secp256k1, secp256r1, secp384r1 and secp521r1; Ed25519, Ed25519ctx,
 Ed25519ph, Ed448 and Ed448ph; and the FIPS 204 parameter sets ML-DSA-44, ML-DSA-65 and
