@@ -52,6 +52,20 @@ namespace cloud.charging.open.chargy.Crypto
     /// <param name="Context">
     /// An optional context string, for the algorithms that take one:
     /// Ed25519ctx, Ed448 and ML-DSA.
+    ///
+    /// It separates domains and nothing else. A signature made under one context
+    /// does not verify under another, so a signature meant to vouch for a charging
+    /// record cannot be replayed as vouching for something else — the arithmetic
+    /// fails rather than a policy check being expected to notice.
+    ///
+    /// It is <b>not</b> an identity and must not be used as one. Everyone holding
+    /// the key can sign under any context they like, so a context naming a person,
+    /// a device or a department proves only what the signer chose to claim. Two
+    /// signers sharing one key stay indistinguishable, and worse than if the name
+    /// had been written into the message: a context travels out of band, so a
+    /// verifier who guesses it wrongly is told "invalid signature" and cannot tell
+    /// that apart from a forgery. Who signed is a question for one key per signer
+    /// and the public key infrastructure that binds a key to its owner.
     /// </param>
     /// <param name="Prehashed">
     /// Whether <c>Message</c> is already the hash to be signed rather than the
