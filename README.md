@@ -1,5 +1,8 @@
 # Chargy Core .NET
 
+[![CI](https://github.com/OpenChargingCloud/ChargyCore.NET/actions/workflows/ci.yml/badge.svg)](https://github.com/OpenChargingCloud/ChargyCore.NET/actions/workflows/ci.yml)
+[![Nightly](https://github.com/OpenChargingCloud/ChargyCore.NET/actions/workflows/nightly.yml/badge.svg)](https://github.com/OpenChargingCloud/ChargyCore.NET/actions/workflows/nightly.yml)
+
 Chargy Core is a transparency software library for the validation of secure and transparent e-mobility charging processes, as defined by the *German Calibration Law ("Eichrecht")* in combination with the [Alternative Fuels Infrastructure Regulation (AFIR)](https://transport.ec.europa.eu/transport-themes/clean-transport/alternative-fuels-sustainable-mobility-europe/alternative-fuels-infrastructure_en) and the new [Measuring instruments (MID)](https://single-market-economy.ec.europa.eu/single-market/goods/european-standards/harmonised-standards/measuring-instruments-mid_en) of the European Commission and the [European Digital Quality Infrastructure](https://www.qi-digital.de/en/). The software allows you to verify the cryptographic signatures of energy measurements within charge detail records and comes with a couple of useful extentions to simplify the entire process for endusers and operators.
 
 ChargyCore.NET is the C# / .NET 10 port of [ChargyCore.TS](https://github.com/OpenChargingCloud/ChargyCore.TS), for server-side verification, backend integrations and .NET-based applications.
@@ -332,7 +335,13 @@ records, so their bytes are what is under test, and a Windows checkout rewrites 
 endings by default. [`.gitattributes`](.gitattributes) prevents that, and the Windows leg
 is what proves it — before building, every tracked file on disk is compared against the
 bytes the repository holds. The GitHub Windows image runs with `core.autocrlf=true` and
-does rewrite 197 of the repository's other files; all 204 fixtures come through untouched.
+does rewrite 199 of the repository's other files; all 204 fixtures come through untouched.
+
+A [nightly workflow](.github/workflows/nightly.yml) runs the same suite again when nobody
+pushed, because Styx and Hermod are not pinned — they are sibling checkouts of master, so a
+breaking change there is a red night with nothing in this repository having moved. It also
+compares all 204 fixtures with `ChargyCore.TS` byte for byte, which is the one half of the
+parity contract neither test suite can check on its own: each only ever sees its own copy.
 
 All cryptography is provided by [BouncyCastle](https://www.bouncycastle.org/) — ECDSA over
 secp192k1, secp192r1, secp224k1, secp256k1, secp256r1, secp384r1 and secp521r1, plus the

@@ -1,0 +1,194 @@
+name: Nightly
+
+# The counterpart to ci.yml. That workflow gates every push; this one runs when
+# nobody pushed, because two things this repository depends on can move without
+# a commit here:
+#
+#  * Styx and Hermod. Neither is pinned — no submodule, no package version, just
+#    a sibling checkout of master — so a breaking change over there turns this
+#    red on a day when nothing in ChargyCore.NET moved at all. That is the whole
+#    reason this file exists.
+#  * The fixtures of ChargyCore.TS, which are shared with this port byte for
+#    byte. See the second job.
+#
+# Two things worth knowing about scheduled workflows: they only ever run on the
+# default branch, and GitHub disables them after 60 days without any repository
+# activity. If this stops reporting, that is the first thing to check.
+on:
+  schedule:
+    # 03:17 UTC, an hour after Hermod's night. Not on the hour: GitHub's
+    # scheduler is busiest then and delays runs by tens of minutes. An hour
+    # after, because this builds against Hermod master — when their night is
+    # red, ours will be too, and the order in time says which came first.
+    - cron: '17 3 * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: nightly-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+
+  full-suite:
+    # The same two legs as ci.yml — Windows, and Debian 13 in a bare debian:13
+    # container. See ci.yml for why it is exactly these two.
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            leg: windows-latest
+          - os: ubuntu-latest
+            container: debian:13
+            leg: debian-13-container
+    runs-on: ${{ matrix.os }}
+    container: ${{ matrix.container }}
+    steps:
+
+      # Before the checkout, as in ci.yml: without git in the container,
+      # actions/checkout falls back to a tarball and leaves no index for the
+      # fixture check to compare against.
+      - name: Install .NET prerequisites (Debian container)
+        if: runner.os == 'Linux'
+        run: apt-get update && apt-get install -y --no-install-recommends ca-certificates curl git mawk libicu76 libssl3t64 libstdc++6 tzdata
+
+      - uses: actions/checkout@v7
+        with:
+          path: ChargyCore.NET
+
+      - uses: actions/checkout@v7
+        with:
+          repository: Vanaheimr/Styx
+          path: Styx
+
+      - uses: actions/checkout@v7
+        with:
+          repository: Vanaheimr/Hermod
+          path: Hermod
+
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '10.0.x'
+
+      # Repeated from the gate rather than left to it, because what this step
+      # watches can also change without a push: the runner images. The Windows
+      # image checks out with core.autocrlf=true today, and the fixtures survive
+      # it only because .gitattributes marks them "-text". An image whose git
+      # configuration moved would show up here first.
+      - name: Fixtures arrived byte for byte
+        shell: bash
+        working-directory: ChargyCore.NET
+        run: |
+          echo "core.autocrlf: $(git config --get core.autocrlf || echo 'unset')"
+
+          git ls-files                       > ../paths.txt
+          git ls-files -s | awk '{print $2}' > ../index.sha
+          git hash-object --no-filters --stdin-paths < ../paths.txt > ../ondisk.sha
+
+          paste ../paths.txt ../index.sha ../ondisk.sha |
+          awk -F'\t' '
+              $1 ~ /^ChargyCoreTests\/TestData\// {
+                  fixtures++
+                  if ($2 != $3) { print "::error file=ChargyCore.NET/" $1 "::checked out with other bytes than the repository holds"; altered++ }
+                  next
+              }
+              $2 != $3 { converted++ }
+              END {
+                  printf "%d fixtures checked, %d altered by the checkout\n", fixtures, altered
+                  printf "%d of the %d other tracked files were rewritten on checkout\n", converted, NR - fixtures
+                  if (converted == 0)
+                      print "note: this runner converts nothing at all, so the fixture result above is not evidence on its own"
+                  exit altered ? 1 : 0
+              }'
+
+      - name: Build
+        working-directory: ChargyCore.NET
+        run: dotnet build ChargyCore.slnx --configuration Release
+
+      # The same suite the gate runs. Repeating it is worth the minutes for the
+      # reason at the top of this file — and because a test that only fails
+      # sometimes needs more than one run to be seen. Fatal: a red here is a
+      # real regression, whether it originated in this repository or in Styx or
+      # Hermod.
+      - name: Test
+        timeout-minutes: 30
+        working-directory: ChargyCore.NET
+        run: dotnet test ChargyCore.slnx --configuration Release --no-build --logger "console;verbosity=normal" --logger "trx;LogFileName=${{ matrix.leg }}.trx" --results-directory artifacts
+
+      - name: Upload test results
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-results-${{ matrix.leg }}
+          path: ChargyCore.NET/artifacts/*.trx
+
+  fixture-parity:
+    # The 204 test fixtures — signed charge transparency records and the golden
+    # verification reports both implementations have to reproduce — are shared
+    # byte for byte with OpenChargingCloud/ChargyCore.TS. That is the parity
+    # contract of this port, and it is the one part of it no test in either
+    # repository can check on its own: each suite only ever sees its own copy.
+    #
+    # continue-on-error, so that drift turns THIS JOB red while the night as a
+    # whole stays green. Drift normally means upstream moved and this port has
+    # not followed yet, which is a task rather than a defect — and following it
+    # is a deliberate commit, as f3bab3c was for v0.12.0. A night that goes red
+    # for "somebody else released something" stops being read, but a summary
+    # nobody is nudged to open is not much better, and a failed job is visible
+    # without being in the way.
+    #
+    # The summary names every file, which is what the next sync needs. If drift
+    # ever turns out to need enforcing, dropping this line is the whole change.
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+
+      - uses: actions/checkout@v7
+        with:
+          path: ChargyCore.NET
+
+      - uses: actions/checkout@v7
+        with:
+          repository: OpenChargingCloud/ChargyCore.TS
+          path: ChargyCore.TS
+
+      - name: Compare the fixtures with ChargyCore.TS
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          # "<path>\t<sha256>", sorted in C collation so that join agrees with
+          # sort about the order.
+          list() {
+            ( cd "$1" && find . -type f -print0 | xargs -0 sha256sum ) |
+            awk '{ print substr($2, 3) "\t" $1 }' | LC_ALL=C sort
+          }
+
+          list ChargyCore.NET/ChargyCoreTests/TestData > ours.tsv
+          list ChargyCore.TS/tests/fixtures            > theirs.tsv
+
+          echo "this port: $(wc -l < ours.tsv) fixtures, ChargyCore.TS: $(wc -l < theirs.tsv)"
+
+          # A full outer join, so that a file missing on either side is a row
+          # rather than a silent absence.
+          join -t "$(printf '\t')" -a1 -a2 -e MISSING -o 0,1.2,2.2 ours.tsv theirs.tsv |
+          awk -F'\t' -v summary="$GITHUB_STEP_SUMMARY" '
+              $2 == "MISSING" { onlyTS  = onlyTS  "- `" $1 "` — in ChargyCore.TS only, this port has not picked it up\n"; drift++; next }
+              $3 == "MISSING" { onlyNET = onlyNET "- `" $1 "` — in this port only, ChargyCore.TS does not have it\n";     drift++; next }
+              $2 != $3        { differs = differs "- `" $1 "` — same name, different bytes\n";                            drift++; next }
+                              { identical++ }
+              END {
+                  print "## Fixture parity with ChargyCore.TS\n" > summary
+
+                  if (drift == 0)
+                      printf "All %d fixtures are byte-identical with `OpenChargingCloud/ChargyCore.TS`.\n", identical > summary
+                  else {
+                      printf "**%d of %d fixtures have drifted.** The signed inputs and the golden reports are shared byte-for-byte between the two implementations; a difference means one of them moved and the other has not followed yet.\n\n", drift, drift + identical > summary
+                      if (differs != "") print "### Different content\n"      differs > summary
+                      if (onlyTS  != "") print "### Missing from this port\n" onlyTS  > summary
+                      if (onlyNET != "") print "### Not in ChargyCore.TS\n"   onlyNET > summary
+                  }
+
+                  printf "%d identical, %d drifted\n", identical, drift
+                  exit drift ? 1 : 0
+              }'
