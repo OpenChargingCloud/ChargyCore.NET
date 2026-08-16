@@ -35,6 +35,13 @@ namespace cloud.charging.open.chargy
     /// whom to contact about it.
     /// </summary>
     /// <param name="Name">The name of the manufacturer.</param>
+    /// <param name="URL">
+    /// An optional web address of the manufacturer.
+    ///
+    /// Distinct from a contact's web address, which is where to write to about a
+    /// particular device: this is who the manufacturer is. Some formats carry
+    /// only one of the two, and which one they carry is what they mean.
+    /// </param>
     /// <param name="Description">An optional multi-language description.</param>
     /// <param name="Contact">An optional contact.</param>
     /// <param name="Support">An optional support.</param>
@@ -43,6 +50,7 @@ namespace cloud.charging.open.chargy
     /// <param name="PublicKeys">Optional public keys of the manufacturer.</param>
     /// <param name="Context">An optional JSON-LD context.</param>
     public class Manufacturer(String?                  Name            = null,
+                              String?                  URL             = null,
                               I18NString?              Description     = null,
                               Contact?                 Contact         = null,
                               Support?                 Support         = null,
@@ -56,6 +64,9 @@ namespace cloud.charging.open.chargy
 
         /// <summary>The name of the manufacturer.</summary>
         public String?                   Name              { get; } = Name;
+
+        /// <summary>An optional web address of the manufacturer.</summary>
+        public String?                   URL               { get; } = URL;
 
         /// <summary>An optional multi-language description.</summary>
         public I18NString?               Description       { get; } = Description;
@@ -106,6 +117,7 @@ namespace cloud.charging.open.chargy
 
             Manufacturer = new Manufacturer(
                                JSON["name"]?.Value<String>(),
+                               JSON["url"]?. Value<String>(),
                                JSON["description"] is JObject descriptionJSON
                                    ? I18NString.Parse(descriptionJSON)
                                    : null,
@@ -143,6 +155,9 @@ namespace cloud.charging.open.chargy
 
             if (Name           is not null)
                 json.Add(new JProperty("name",            Name));
+
+            if (URL            is not null)
+                json.Add(new JProperty("url",             URL));
 
             if (Description.IsNotNullOrEmpty())
                 json.Add(new JProperty("description",     Description.ToJSON()));

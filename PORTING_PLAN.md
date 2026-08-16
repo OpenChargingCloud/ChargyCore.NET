@@ -581,6 +581,13 @@ infrastructure. Every step is a self-contained increment: format + its `ACrypt` 
    only fill the gaps. OCMF has no field for a manufacturer's web address or a
    hardware revision, so those can only come from the container — which is also the
    clearest evidence that the merge happened at all.
+
+   The web address first went into `Manufacturer.Contact.Web`, for want of anywhere
+   better. Upstream then arrived at the same merge independently in `7b7145a` and
+   gave `IManufacturer` a `url` of its own, so this port followed: a contact's web
+   address is where to write to about a device, and this is who the manufacturer is.
+   The vendor homepages the other formats hardcode stay in `contact.web`, exactly as
+   upstream keeps them.
    The three QIDigital files are **34 TypeScript interface declarations and nothing
    else** — no parser, no verification, no fixture, and referenced nowhere but
    `index.ts`. A TypeScript interface costs nothing at runtime; a C# data model has

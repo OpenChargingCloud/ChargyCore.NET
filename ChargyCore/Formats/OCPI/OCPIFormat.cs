@@ -209,9 +209,7 @@ namespace cloud.charging.open.chargy.Formats.OCPI
                                                  Text(meterInfo, "meterId") ?? "",
                                                  Manufacturer:  new Manufacturer(
                                                                     Text(meterInfo, "manufacturer"),
-                                                                    Contact: Text(meterInfo, "manufacturerURL") is String manufacturerURL
-                                                                                 ? new Contact(Web: manufacturerURL)
-                                                                                 : null
+                                                                    Text(meterInfo, "manufacturerURL")
                                                                 ),
                                                  Model:         new DeviceModel(
                                                                     Text(meterInfo, "model"),

@@ -538,7 +538,11 @@ namespace cloud.charging.open.chargy.Formats.OCMF
             var energyMeter = new EnergyMeter(
                                   meterSerial,
                                   Manufacturer:     meterVendor is not null
-                                                        ? new Manufacturer(meterVendor, Contact: containerMeter?.Manufacturer?.Contact)
+                                                        ? new Manufacturer(
+                                                              meterVendor,
+                                                              containerMeter?.Manufacturer?.URL,
+                                                              Contact: containerMeter?.Manufacturer?.Contact
+                                                          )
                                                         : containerMeter?.Manufacturer,
                                   Model:            meterModel is not null
                                                         ? new DeviceModel(meterModel, URL: containerMeter?.Model?.URL)

@@ -116,8 +116,8 @@ namespace cloud.charging.open.chargy.tests.Formats
                 Assert.That(energyMeter.Firmware?.Version,         Is.EqualTo("1.0"));
 
                 // ..., and the container fills what OCMF has no field for.
-                Assert.That(energyMeter.Hardware?.Revision,        Is.EqualTo("r1.0"));
-                Assert.That(energyMeter.Manufacturer?.Contact?.Web, Is.EqualTo("https://www.phoenixcontact.com"));
+                Assert.That(energyMeter.Hardware?.Revision,     Is.EqualTo("r1.0"));
+                Assert.That(energyMeter.Manufacturer?.URL,      Is.EqualTo("https://www.phoenixcontact.com"));
 
                 #endregion
 
@@ -145,6 +145,7 @@ namespace cloud.charging.open.chargy.tests.Formats
             container["meterInfo"] = new JObject(
                                          new JProperty("meterId",         "SOMETHING-ELSE"),
                                          new JProperty("manufacturer",    "Not Phoenix Contact"),
+                                         new JProperty("manufacturerURL", "https://www.phoenixcontact.com"),
                                          new JProperty("model",           "Not an EEM-350"),
                                          new JProperty("firmwareVersion", "9.9"),
                                          new JProperty("hardwareVersion", "r1.0")
@@ -163,8 +164,11 @@ namespace cloud.charging.open.chargy.tests.Formats
                 Assert.That(energyMeter.Model?.Name,         Is.EqualTo("EEM-350-D-MCB"));
                 Assert.That(energyMeter.Firmware?.Version,   Is.EqualTo("1.0"));
 
-                // The one thing OCMF does not state is still the container's to say.
+                // What OCMF does not state is still the container's to say — and
+                // the container is disbelieved about the manufacturer's name
+                // while being believed about its web address in the same object.
                 Assert.That(energyMeter.Hardware?.Revision,  Is.EqualTo("r1.0"));
+                Assert.That(energyMeter.Manufacturer?.URL,   Is.EqualTo("https://www.phoenixcontact.com"));
 
             });
 
