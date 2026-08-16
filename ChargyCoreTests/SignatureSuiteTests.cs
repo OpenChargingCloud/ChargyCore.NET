@@ -445,26 +445,80 @@ namespace cloud.charging.open.chargy.tests
 
         #endregion
 
-        #region MLDSA_refuses_a_context_it_cannot_honour()
+        #region MLDSA_binds_the_context_string_into_the_signature(Algorithm)
 
-        [Test]
-        public void MLDSA_refuses_a_context_it_cannot_honour()
+        // FIPS 204 lets a signature carry a context of up to 255 bytes, which is
+        // not part of the message and is signed all the same. That is domain
+        // separation: a signature made to vouch for one thing cannot be replayed
+        // as vouching for another, because the mathematics fails rather than some
+        // policy check being expected to notice.
+        //
+        // The point of the test is that the context is genuinely part of the
+        // signature and not decoration: every combination in which the two sides
+        // disagree has to fail.
+        [TestCase("ML-DSA-44")]
+        [TestCase("ML-DSA-65")]
+        [TestCase("ML-DSA-87")]
+        public void MLDSA_binds_the_context_string_into_the_signature(String Algorithm)
         {
 
-            // FIPS 204 defines an optional context string and ChargyCore.TS passes
-            // it through to Noble, but BouncyCastle 2.7.0 does not expose it.
-            // Dropping it quietly would produce a signature that does not match the
-            // record and, worse, report a valid measurement as invalid.
-            var suite      = SignatureSuites.Get("ML-DSA-44");
-            var privateKey = suite.GenerateKeyPair().PrivateKey;
+            var suite    = SignatureSuites.Get(Algorithm)!;
+            var keyPair  = suite.GenerateKeyPair();
+            var message  = "OCMF|{\"FV\":\"1.4\"}"u8.ToArray();
+
+            var chargy   = new SignatureOptions(Context: "chargy-transparency"u8.ToArray());
+            var invoice  = new SignatureOptions(Context: "chargy-invoice"u8.ToArray());
+
+            var signed   = suite.Sign(message, keyPair.PrivateKey, chargy);
+            var plain    = suite.Sign(message, keyPair.PrivateKey);
 
             Assert.Multiple(() => {
 
-                Assert.That(() => suite.Sign([1], privateKey, new SignatureOptions(Context: [ 0x61 ])),
-                            Throws.TypeOf<NotSupportedException>());
+                Assert.That(suite.Verify(message, signed, keyPair.PublicKey, chargy),   Is.True);
 
-                // An empty context is the default and works.
-                Assert.That(() => suite.Sign([1], privateKey, new SignatureOptions(Context: [])),
+                // The same signature, the same message, the same key — and a
+                // different purpose.
+                Assert.That(suite.Verify(message, signed, keyPair.PublicKey, invoice),  Is.False);
+                Assert.That(suite.Verify(message, signed, keyPair.PublicKey),           Is.False);
+
+                // ..., and the other way round: a signature made without a context
+                // does not become one made with it.
+                Assert.That(suite.Verify(message, plain,  keyPair.PublicKey),           Is.True);
+                Assert.That(suite.Verify(message, plain,  keyPair.PublicKey, chargy),   Is.False);
+
+                // An empty context is no context, which is what OCMF signs with:
+                // the format defines none, so every fixture verifies this way.
+                Assert.That(suite.Verify(message, plain,  keyPair.PublicKey, new SignatureOptions(Context: [])),  Is.True);
+
+            });
+
+        }
+
+        #endregion
+
+        #region MLDSA_refuses_a_context_longer_than_FIPS_204_allows()
+
+        [Test]
+        public void MLDSA_refuses_a_context_longer_than_FIPS_204_allows()
+        {
+
+            var suite      = SignatureSuites.Get("ML-DSA-44")!;
+            var keyPair    = suite.GenerateKeyPair();
+
+            // The length goes into the signed domain separator as a single byte,
+            // so 255 is the ceiling. Refused rather than left to the signer,
+            // because verification fails closed: an over-long context would come
+            // back as "this signature is invalid", which says something about the
+            // charging record instead of about the call that was made.
+            Assert.Multiple(() => {
+
+                Assert.That(() => suite.Sign  ([1], keyPair.PrivateKey, new SignatureOptions(Context: new Byte[256])),
+                            Throws.ArgumentException);
+
+                Assert.That(() => suite.Verify([1], [1], keyPair.PublicKey, new SignatureOptions(Context: new Byte[256])),
+                            Throws.ArgumentException);
+
+                Assert.That(() => suite.Sign  ([1], keyPair.PrivateKey, new SignatureOptions(Context: new Byte[255])),
                             Throws.Nothing);
 
             });

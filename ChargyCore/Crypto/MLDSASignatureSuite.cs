@@ -17,6 +17,7 @@
 
 #region Usings
 
+using Org.BouncyCastle.Crypto;
 using Org.BouncyCastle.Crypto.Generators;
 using Org.BouncyCastle.Crypto.Parameters;
 using Org.BouncyCastle.Crypto.Signers;
@@ -39,6 +40,12 @@ namespace cloud.charging.open.chargy.Crypto
     {
 
         #region Data
+
+        /// <summary>
+        /// The longest context string FIPS 204 allows — its length is written
+        /// into the signed domain separator as a single byte.
+        /// </summary>
+        public const Int32 MaximumContextLength = 255;
 
         private readonly MLDsaParameters parameters = Algorithm switch {
                                                           "ML-DSA-44"  => MLDsaParameters.ml_dsa_44,
@@ -174,7 +181,10 @@ namespace cloud.charging.open.chargy.Crypto
 
             signer.Init(
                 true,
-                MLDsaPrivateKeyParameters.FromEncoding(parameters, PrivateKey.ToArray())
+                WithContext(
+                    MLDsaPrivateKeyParameters.FromEncoding(parameters, PrivateKey.ToArray()),
+                    Options
+                )
             );
 
             signer.BlockUpdate(Message.ToArray(), 0, Message.Length);
@@ -209,7 +219,10 @@ namespace cloud.charging.open.chargy.Crypto
 
                 signer.Init(
                     false,
-                    MLDsaPublicKeyParameters.FromEncoding(parameters, PublicKey.ToArray())
+                    WithContext(
+                        MLDsaPublicKeyParameters.FromEncoding(parameters, PublicKey.ToArray()),
+                        Options
+                    )
                 );
 
                 signer.BlockUpdate(Message.ToArray(), 0, Message.Length);
@@ -227,19 +240,40 @@ namespace cloud.charging.open.chargy.Crypto
         #endregion
 
 
-        #region (private) AssertRawOptions(Options)
+        #region (private, static) WithContext     (Key, Options)
+
+        /// <summary>
+        /// The key, bound to the context string when one was given.
+        ///
+        /// FIPS 204 lets a signature carry an arbitrary context of up to 255
+        /// bytes, which is not part of the message and is nevertheless signed.
+        /// That is domain separation: the same signed bytes under a different
+        /// context are not a valid signature, so a signature made to vouch for a
+        /// charging record cannot be replayed as one vouching for something else.
+        /// </summary>
+        /// <param name="Key">A public or private key.</param>
+        /// <param name="Options">The options a caller supplied, if any.</param>
+        private static ICipherParameters WithContext(ICipherParameters   Key,
+                                                     SignatureOptions?   Options)
+
+            => Options?.Context is Byte[] context && context.Length > 0
+                   ? new ParametersWithContext(Key, context)
+                   : Key;
+
+        #endregion
+
+        #region (private, static) AssertRawOptions(Options)
 
         /// <summary>
         /// ML-DSA has no encoding choice, and its pre-hash mode is a separate
         /// scheme rather than a boolean, so neither option is accepted here.
         /// </summary>
-        /// <exception cref="NotSupportedException">
-        /// When a context string is given. FIPS 204 defines one and ChargyCore.TS
-        /// passes it through to Noble, but BouncyCastle 2.7.0 does not expose it.
-        /// This throws rather than signing or verifying without the context:
-        /// quietly dropping it would produce signatures that do not match the
-        /// record, and — worse on the verifying side — report a valid measurement
-        /// as invalid without saying why.
+        /// <exception cref="ArgumentException">
+        /// When options are given that ML-DSA does not have, or a context longer
+        /// than FIPS 204 allows. The length is checked here rather than left to
+        /// the signer, because verification fails closed: an over-long context
+        /// would come back as "this signature is invalid", which is a statement
+        /// about the charging record instead of about the call that was made.
         /// </exception>
         private static void AssertRawOptions(SignatureOptions? Options)
         {
@@ -253,8 +287,8 @@ namespace cloud.charging.open.chargy.Crypto
             if (Options.Encoding.HasValue && Options.Encoding != SignatureEncoding.Raw)
                 throw new ArgumentException("ML-DSA signatures use raw encoding!", nameof(Options));
 
-            if (Options.Context is not null && Options.Context.Length > 0)
-                throw new NotSupportedException("BouncyCastle 2.7.0 does not expose the FIPS 204 context string for ML-DSA. Signing or verifying without it would silently produce a different result!");
+            if (Options.Context is not null && Options.Context.Length > MaximumContextLength)
+                throw new ArgumentException($"A FIPS 204 context string may not be longer than {MaximumContextLength} bytes!", nameof(Options));
 
         }
 

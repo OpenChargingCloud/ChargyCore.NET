@@ -953,22 +953,34 @@ Baseline moved to `8d7735e`. No fixture data changed. What matters here:
 
 ## 7c. Known limitations of this port
 
-### ML-DSA context strings are not supported
+*(Nothing outstanding. The one entry this section used to hold was wrong; it is
+kept below rather than deleted, because how a limitation gets recorded in error
+is worth remembering.)*
 
-FIPS 204 defines an optional context string for ML-DSA, and ChargyCore.TS passes
-it through to Noble. **BouncyCastle 2.7.0 does not expose it** — there is no
-`ParametersWithContext` and `MLDsaSigner.Init()` takes the key parameters alone.
+### ~~ML-DSA context strings are not supported~~ — corrected
 
-`MLDSASignatureSuite` therefore **throws `NotSupportedException`** when a non-empty
-context is supplied, in both `Sign()` and `Verify()`. Dropping it quietly would
-produce signatures that do not match the record, and on the verifying side it
-would report a valid measurement as invalid without saying why — the one failure
-mode a transparency software must not have.
+This section claimed that BouncyCastle 2.7.0 does not expose the FIPS 204 context
+string, that there is no `ParametersWithContext`, and that `MLDSASignatureSuite`
+therefore has to throw. **All three were wrong.**
+`Org.BouncyCastle.Crypto.Parameters.ParametersWithContext` exists in 2.7.0 with
+three constructors, `MLDsaSigner.Init` takes an `ICipherParameters` and therefore
+takes it, and a probe against the real library confirms the context is genuinely
+bound into the signature: the same context verifies, a different one and no
+context both fail, in both directions.
 
-An empty or absent context, which is what the OCMF records in the fixtures use,
-works normally. If a context is ever needed, the options are a newer BouncyCastle
-once it exposes one, or a hand-rolled FIPS 204 domain separator in front of the
-message — the latter only with test vectors to prove it matches.
+The mistake was mine, not a stale note — 2.7.0 was and still is the current
+version. What it cost was a feature written off as impossible for a while, and
+what it shows is that "the library cannot do this" deserves the same probe that a
+signature mismatch gets. The reasoning around it survived intact, though: throwing
+rather than dropping a context silently was right, because a dropped context makes
+a valid measurement report as invalid without saying why.
+
+Supported since: the key is wrapped in `ParametersWithContext` when a context is
+given, and a context longer than the 255 bytes FIPS 204 allows is refused up front
+rather than left to the signer — verification fails closed, so an over-long
+context would otherwise come back as "this signature is invalid", which is a
+statement about the charging record instead of about the call that was made. OCMF
+defines no context, so every fixture continues to sign and verify with none.
 
 ---
 
