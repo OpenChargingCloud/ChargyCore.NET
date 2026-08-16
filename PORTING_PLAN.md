@@ -684,13 +684,55 @@ counterpart to port:
 | `TOTPConfig` (`initialSharedSecret`, `timeStep`) | Data model only. No code computes a one-time password; the algorithm lives in the separate `DynamicQRCodes` repository. |
 
 Both are carried faithfully as data: a link's transports, their weighted endpoint
-lists and their TOTP configuration are read, kept and written back. Building an actual
-live-link client and a TOTP implementation would be **new functionality rather than a
-port**, and is a decision for the project rather than for this plan. Hermod already
-brings HTTP, SSE and WebSocket clients, so the cost would be modest — but a live-link
-client is also the first part of Chargy that would open a network connection on an EV
-driver's behalf, which deserves to be decided deliberately rather than inherited from
-a to-do list.
+lists and their TOTP configuration are read, kept and written back.
+
+### Phase 5b — The live link client ✅ **done, and new rather than ported**
+→ `TOTPGeneratorTests` (6), `LiveLinkEndpointTests` (9), `LiveLinkClientTests` (7).
+
+A charge transparency file is written after the fact; a live link is the same evidence
+while the car is still plugged in. `ChargeTransparencyLiveLinkClient` follows one and
+reports what the station sends, over all three transports. **Every update goes through
+the same pipeline as a file** — what arrives over a WebSocket is not more trustworthy
+for having arrived quickly, so it is verified the same way, and the tests assert a
+valid signature at the end of every transport.
+
+Nothing here happens unless an application asks for it: this is the first part of
+Chargy that opens a network connection on an EV driver's behalf.
+
+**The TOTP was not written.** Hermod — already a dependency — implements the same
+scheme as the Dynamic QR-Code reference implementations, together with a `TOTPConfig`,
+a `TOTP` request header and clients that send it themselves. A second implementation of
+one algorithm inside one dependency chain is exactly the drift that locks a driver out
+of their own charging session, so ChargyCore only translates what a live link states
+into what Hermod takes. What *is* tested here is the dependency, against the reference
+implementation's own vectors: a one-time password is worth nothing unless the station
+and the phone derive the same one, which makes those vectors a compatibility contract
+of the same kind as the shared golden reports. Hermod passes all of them.
+
+The password travels in the `TOTP` header, not in the address — an address ends up in
+every server log along the way, which would outlive the ten seconds the password is
+good for. The `{totp}` placeholder of the Dynamic QR-Codes convention is honoured where
+a URL carries one, because there the address is all a QR code can hold.
+
+Endpoints are chosen the way DNS chooses service records, which is what `priority` and
+`weight` are named after: lower priority first, and equal priorities **drawn** in
+proportion to their weight rather than sorted — a client that always took the heaviest
+endpoint first would send every driver to one host and leave the weights meaning
+nothing.
+
+Two things are worth recording:
+
+* **A polling loop must give up on an address that has never answered.** The first
+  version kept asking, so a station whose first address was dead was never reached at
+  its second — the fallback addresses were decoration. Once an address has answered,
+  a failure is a moment with nothing new rather than a wrong address, and polling
+  carries on.
+* **Hermod cannot yet stream a server-sent event response**, so that one transport uses
+  the runtime's own HTTP client. A chunked `text/event-stream` response is consumed
+  before the call returns, so a stream that never ends never returns; a close-delimited
+  one comes back with its socket already disposed. Both were found with a probe against
+  a local server and are worth fixing in Hermod — when they are, the three transports
+  become one stack again. The other two transports use Hermod throughout.
 
 ### Phase 6 — Polish & release ✅ **done**
 

@@ -216,9 +216,44 @@ exercised by no fixture in either implementation, and **QIDigital** is a data mo
 only — upstream declares 34 TypeScript interfaces and no parser, so the round trip is
 the only claim available without a real calibration certificate.
 
-Not ported, because there is nothing to port: ChargyCore.TS **declares** the three
-live-link transports (`https`, `httpSSE`, `websocket`) and a TOTP configuration, and
-implements neither. Both are carried faithfully as data.
+ChargyCore.TS **declares** the three live-link transports (`https`, `httpSSE`,
+`websocket`) and a TOTP configuration and implements neither, so there was nothing to
+port. ChargyCore.NET implements them as new functionality — see below.
+
+
+## Watching a charging session while it happens
+
+A charge transparency file is written after the fact. A *live link* — the QR code on
+the station's display — is the same evidence while the car is still plugged in.
+
+```csharp
+using cloud.charging.open.chargy.LiveLink;
+
+var client = new ChargeTransparencyLiveLinkClient(detector);
+
+await foreach (var update in client.Connect(liveLink, cancellationToken: token))
+    if (update.Result is ChargeTransparencyRecord record)
+        Console.WriteLine($"{update.Endpoint}: {record.ChargingSessions[0].VerificationResult?.Status}");
+```
+
+Every update goes through the same pipeline as a file: what arrives over a WebSocket is
+not more trustworthy for having arrived quickly, so it is verified the same way.
+Nothing happens unless an application asks for it — this is the only part of Chargy
+that opens a network connection on an EV driver's behalf.
+
+The transports are tried in the order the live link states them, or in the order the
+application prefers. Within a transport, addresses are chosen the way DNS chooses
+service records — lower `priority` first, equal priorities drawn in proportion to their
+`weight` — and an address that never answers is passed over for the next.
+
+Where a transport is protected by a time-based one-time password, the current one is
+sent in the `TOTP` header of every request. The scheme is the one of the
+[Dynamic QR-Codes](https://github.com/OpenChargingCloud/DynamicQRCodes) reference
+implementations, built for the EU AFIR and adopted into OCPP v2.1, and it is
+implemented in Hermod rather than here: two implementations of one algorithm would
+drift, and a password that the station and the phone derive differently locks a driver
+out of their own charging session. ChargyCore's tests check Hermod against the
+reference implementation's own vectors.
 
 
 ## Related projects
