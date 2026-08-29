@@ -306,25 +306,39 @@ namespace cloud.charging.open.chargy
     /// <param name="URL">An optional single URL.</param>
     /// <param name="URLs">Optional endpoints, when there is more than one.</param>
     /// <param name="TOTP">An optional TOTP configuration.</param>
+    /// <param name="Refresh">How often to ask for the document again; HTTPS only.</param>
     public class Transport(TransportType               Type,
-                           String?                     URL   = null,
-                           IEnumerable<TransportURL>?  URLs  = null,
-                           TOTPConfig?                 TOTP  = null)
+                           String?                     URL      = null,
+                           IEnumerable<TransportURL>?  URLs     = null,
+                           TOTPConfig?                 TOTP     = null,
+                           TimeSpan?                   Refresh  = null)
     {
 
         #region Properties
 
         /// <summary>How this transport delivers its data.</summary>
-        public TransportType                 Type    { get; } = Type;
+        public TransportType                 Type       { get; } = Type;
 
         /// <summary>An optional single URL.</summary>
-        public String?                       URL     { get; } = URL;
+        public String?                       URL        { get; } = URL;
 
         /// <summary>Optional endpoints, when there is more than one.</summary>
-        public IReadOnlyList<TransportURL>   URLs    { get; } = URLs?.ToArray() ?? [];
+        public IReadOnlyList<TransportURL>   URLs       { get; } = URLs?.ToArray() ?? [];
 
         /// <summary>An optional TOTP configuration.</summary>
-        public TOTPConfig?                   TOTP    { get; } = TOTP;
+        public TOTPConfig?                   TOTP       { get; } = TOTP;
+
+        /// <summary>
+        /// How often to ask for the document again.
+        ///
+        /// A live link points at a charging session that is still running, so the
+        /// document goes stale by itself and something has to say how often to
+        /// fetch it again. This belongs to HTTPS alone: a WebSocket or a
+        /// server-sent event stream delivers a new document when there is one,
+        /// and if either ever needs a period of its own it will mean something
+        /// else than asking again.
+        /// </summary>
+        public TimeSpan?                     Refresh    { get; } = Refresh;
 
         #endregion
 
@@ -361,11 +375,35 @@ namespace cloud.charging.open.chargy
                 return false;
             }
 
+            #region How often to ask again
+
+            TimeSpan? refresh = null;
+
+            // Only HTTPS declares a refresh period, so only there is it
+            // validated. On the other two it is an unknown property like any
+            // other: neither checked nor a reason to reject the document.
+            if (type == TransportType.HTTPS &&
+                JSON["refresh"] is JToken refreshJSON)
+            {
+
+                if (refreshJSON.Type != JTokenType.Integer &&
+                    refreshJSON.Type != JTokenType.Float)
+                {
+                    return false;
+                }
+
+                refresh = TimeSpan.FromSeconds(refreshJSON.Value<Double>());
+
+            }
+
+            #endregion
+
             Transport = new Transport(
                             type,
                             JSON["url"]?.Value<String>(),
                             urls,
-                            totp
+                            totp,
+                            refresh
                         );
 
             return true;
@@ -395,6 +433,11 @@ namespace cloud.charging.open.chargy
             if (TOTP is not null)
                 json.Add(new JProperty("totp",  TOTP.ToJSON()));
 
+            if (Refresh.HasValue)
+                json.Add(new JProperty("refresh",  Refresh.Value.TotalSeconds % 1 == 0
+                                                       ? new JValue((Int64) Refresh.Value.TotalSeconds)
+                                                       : new JValue(        Refresh.Value.TotalSeconds)));
+
             return json;
 
         }
@@ -420,24 +463,30 @@ namespace cloud.charging.open.chargy
     /// A pointer to the live charge transparency data of a charging station,
     /// as encoded in the QR code on the station itself.
     ///
-    /// Unlike a charge transparency record this carries no measurements at all:
-    /// it tells an application where to subscribe while a charging session is
-    /// still running.
+    /// It describes one charging session that is still running, where a charge
+    /// transparency record is a collection of finished ones, and it tells an
+    /// application where to subscribe while that session lasts. It may carry the
+    /// signed meter values read so far as well — see
+    /// <see cref="IO.ContentFormatDetector.TryToParseLiveLinkMeterValues"/>,
+    /// which turns them into an ordinary charge transparency record — but it
+    /// does not thereby become one.
     /// </summary>
-    /// <param name="Timestamp">An optional timestamp of this live link.</param>
+    /// <param name="Created">An optional timestamp of when this live link was created.</param>
     /// <param name="Description">An optional multi-language description.</param>
     /// <param name="ImageURLs">Optional URLs of images or logos.</param>
     /// <param name="GeoLocation">An optional geographical location of the charging station.</param>
     /// <param name="Connector">An optional technical description of the connector.</param>
-    /// <param name="Transports">The available transports.</param>
+    /// <param name="LiveTransports">The transports carrying the live data.</param>
     /// <param name="Signatures">Optional signatures over this live link.</param>
-    public class ChargeTransparencyLiveLink(String?                     Timestamp    = null,
-                                            I18NString?                 Description  = null,
-                                            IEnumerable<String>?        ImageURLs    = null,
-                                            GeoCoordinate?              GeoLocation  = null,
-                                            LiveLinkConnector?          Connector    = null,
-                                            IEnumerable<Transport>?     Transports   = null,
-                                            IEnumerable<Signature>?     Signatures   = null)
+    /// <param name="OriginalJSON">The document this live link was read from, when it was read from one.</param>
+    public class ChargeTransparencyLiveLink(String?                     Created         = null,
+                                            I18NString?                 Description     = null,
+                                            IEnumerable<String>?        ImageURLs       = null,
+                                            GeoCoordinate?              GeoLocation     = null,
+                                            LiveLinkConnector?          Connector       = null,
+                                            IEnumerable<Transport>?     LiveTransports  = null,
+                                            IEnumerable<Signature>?     Signatures      = null,
+                                            JObject?                    OriginalJSON    = null)
     {
 
         #region Data
@@ -451,26 +500,43 @@ namespace cloud.charging.open.chargy
 
         #region Properties
 
-        /// <summary>An optional timestamp of this live link.</summary>
-        public String?                     Timestamp      { get; } = Timestamp;
+        /// <summary>An optional timestamp of when this live link was created.</summary>
+        public String?                     Created           { get; } = Created;
 
         /// <summary>An optional multi-language description.</summary>
-        public I18NString?                 Description    { get; } = Description;
+        public I18NString?                 Description       { get; } = Description;
 
         /// <summary>Optional URLs of images or logos.</summary>
-        public IReadOnlyList<String>       ImageURLs      { get; } = ImageURLs?. ToArray() ?? [];
+        public IReadOnlyList<String>       ImageURLs         { get; } = ImageURLs?.     ToArray() ?? [];
 
         /// <summary>An optional geographical location of the charging station.</summary>
-        public GeoCoordinate?              GeoLocation    { get; } = GeoLocation;
+        public GeoCoordinate?              GeoLocation       { get; } = GeoLocation;
 
         /// <summary>An optional technical description of the connector.</summary>
-        public LiveLinkConnector?          Connector      { get; } = Connector;
+        public LiveLinkConnector?          Connector         { get; } = Connector;
 
-        /// <summary>The available transports.</summary>
-        public IReadOnlyList<Transport>    Transports     { get; } = Transports?.ToArray() ?? [];
+        /// <summary>The transports carrying the live data.</summary>
+        public IReadOnlyList<Transport>    LiveTransports    { get; } = LiveTransports?.ToArray() ?? [];
 
         /// <summary>Optional signatures over this live link.</summary>
-        public IReadOnlyList<Signature>    Signatures     { get; } = Signatures?.ToArray() ?? [];
+        public IReadOnlyList<Signature>    Signatures        { get; } = Signatures?.    ToArray() ?? [];
+
+        /// <summary>
+        /// The document this live link was read from, when it was read from one.
+        ///
+        /// A live link is an open document: everything this reader does not model
+        /// — the charging station, its operator, the energy meter, the signed
+        /// meter values — arrives alongside what it does, and the newer fixtures
+        /// are signed over the whole of it. A reader that re-assembled the
+        /// document from its own model would drop those parts and with them the
+        /// bytes any such signature covers, so the original is kept and written
+        /// back unchanged.
+        ///
+        /// This is the object <see cref="TryParse"/> was handed rather than a
+        /// copy of it, so that recognising a document does not cost a clone of
+        /// it. <see cref="ToJSON"/> clones before returning.
+        /// </summary>
+        public JObject?                    OriginalJSON      { get; } = OriginalJSON;
 
         #endregion
 
@@ -510,11 +576,11 @@ namespace cloud.charging.open.chargy
             if (JSON["@context"]?.Value<String>() != JSONLDContext)
                 return false;
 
-            #region When the link was written, if it says
+            #region When the link was created, if it says
 
-            String? timestamp = null;
+            String? created = null;
 
-            if (JSON["timestamp"] is JToken timestampJSON)
+            if (JSON["created"] is JToken timestampJSON)
                 switch (timestampJSON.Type)
                 {
 
@@ -522,7 +588,7 @@ namespace cloud.charging.open.chargy
                         break;
 
                     case JTokenType.String:
-                        timestamp = timestampJSON.Value<String>();
+                        created = timestampJSON.Value<String>();
                         break;
 
                     // A JSON reader that turns timestamps into dates of its own
@@ -533,11 +599,11 @@ namespace cloud.charging.open.chargy
                     case JTokenType.Date:
                         // A JSON date arrives as a DateTime or as a DateTimeOffset,
                         // depending on whether the text carried an offset.
-                        timestamp = (timestampJSON is JValue { Value: DateTimeOffset offset }
-                                         ? offset
-                                         : new DateTimeOffset(timestampJSON.Value<DateTime>().ToUniversalTime(), TimeSpan.Zero)).
-                                    ToUniversalTime().
-                                    ToString("yyyy-MM-dd'T'HH:mm:ss.fff'Z'", CultureInfo.InvariantCulture);
+                        created = (timestampJSON is JValue { Value: DateTimeOffset offset }
+                                       ? offset
+                                       : new DateTimeOffset(timestampJSON.Value<DateTime>().ToUniversalTime(), TimeSpan.Zero)).
+                                  ToUniversalTime().
+                                  ToString("yyyy-MM-dd'T'HH:mm:ss.fff'Z'", CultureInfo.InvariantCulture);
                         break;
 
                     default:
@@ -581,13 +647,26 @@ namespace cloud.charging.open.chargy
 
             }
 
+            // Upstream 3a2d3ad moved the position onto the charging station,
+            // where a charge transparency record has always kept it, so a live
+            // link written since then states it there and nowhere else.
+            //
+            // Read leniently, unlike the property above: that one is what the
+            // type guard validates, so a malformed value there means the
+            // document is not a live link. Nobody validates the station block,
+            // and refusing a usable list of addresses over a bad coordinate
+            // inside it would be stricter than upstream for no gain.
+            geoLocation ??= JSON["chargingStation"]?["geoLocation"] is JObject stationLocation
+                                ? GeoCoordinate.TryParse(stationLocation)
+                                : null;
+
             #endregion
 
             #region How to reach it
 
-            var transports = new List<Transport>();
+            var liveTransports = new List<Transport>();
 
-            if (JSON["transports"] is JToken transportsJSON)
+            if (JSON["liveTransports"] is JToken transportsJSON)
             {
 
                 if (transportsJSON is not JArray transportArray)
@@ -604,7 +683,7 @@ namespace cloud.charging.open.chargy
                         return false;
                     }
                     else
-                        transports.Add(transport!);
+                        liveTransports.Add(transport!);
 
             }
 
@@ -615,6 +694,14 @@ namespace cloud.charging.open.chargy
                 !LiveLinkConnector.TryParse(connectorObject, out connector)))
             {
                 return false;
+            }
+
+            // The connector moved below the EVSE below the charging station with
+            // the same commit, and is read there as leniently as the position.
+            if (connector is null &&
+                JSON["chargingStation"]?["EVSE"]?["connector"] is JObject evseConnector)
+            {
+                LiveLinkConnector.TryParse(evseConnector, out connector);
             }
 
             #endregion
@@ -638,15 +725,16 @@ namespace cloud.charging.open.chargy
             #endregion
 
             ChargeTransparencyLiveLink = new ChargeTransparencyLiveLink(
-                                             timestamp,
+                                             created,
                                              JSON["description"] is JObject description
                                                  ? I18NString.Parse(description)
                                                  : null,
                                              StringList.Parse(JSON["imageURLs"]),
                                              geoLocation,
                                              connector,
-                                             transports,
-                                             signatures
+                                             liveTransports,
+                                             signatures,
+                                             JSON
                                          );
 
             return true;
@@ -663,30 +751,51 @@ namespace cloud.charging.open.chargy
         public JObject ToJSON()
         {
 
+            #region A link that was read is written back as it arrived
+
+            // Everything this reader does not model would be lost otherwise, and
+            // the signatures a live link may carry are taken over the whole
+            // document. The one property that may have changed on the way in is
+            // the creation timestamp: a link that carried none is stamped when it
+            // is read, and a date token is rewritten the way Chargy spells one.
+            if (OriginalJSON is not null)
+            {
+
+                var document = (JObject) OriginalJSON.DeepClone();
+
+                if (Created is not null)
+                    document["created"] = Created;
+
+                return document;
+
+            }
+
+            #endregion
+
             var json = new JObject(
                            new JProperty("@context", JSONLDContext)
                        );
 
-            if (Timestamp is not null)
-                json.Add(new JProperty("timestamp",    Timestamp));
+            if (Created is not null)
+                json.Add(new JProperty("created",         Created));
 
             if (Description.IsNotNullOrEmpty())
-                json.Add(new JProperty("description",  Description.ToJSON()));
+                json.Add(new JProperty("description",     Description.ToJSON()));
 
             if (ImageURLs. Count > 0)
-                json.Add(new JProperty("imageURLs",    new JArray(ImageURLs)));
+                json.Add(new JProperty("imageURLs",       new JArray(ImageURLs)));
 
             if (GeoLocation.HasValue)
-                json.Add(new JProperty("geoLocation",  GeoLocation.Value.ToJSON()));
+                json.Add(new JProperty("geoLocation",     GeoLocation.Value.ToJSON()));
 
             if (Connector is not null)
-                json.Add(new JProperty("connector",    Connector.ToJSON()));
+                json.Add(new JProperty("connector",       Connector.ToJSON()));
 
-            if (Transports.Count > 0)
-                json.Add(new JProperty("transports",   new JArray(Transports.Select(transport => transport.ToJSON()))));
+            if (LiveTransports.Count > 0)
+                json.Add(new JProperty("liveTransports",  new JArray(LiveTransports.Select(transport => transport.ToJSON()))));
 
             if (Signatures.Count > 0)
-                json.Add(new JProperty("signatures",   new JArray(Signatures.Select(signature => signature.ToJSON()))));
+                json.Add(new JProperty("signatures",      new JArray(Signatures.Select(signature => signature.ToJSON()))));
 
             return json;
 
@@ -701,7 +810,7 @@ namespace cloud.charging.open.chargy
         /// </summary>
         public override String ToString()
 
-            => $"{Transports.Count} transport(s)";
+            => $"{LiveTransports.Count} transport(s)";
 
         #endregion
 

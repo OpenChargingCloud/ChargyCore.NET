@@ -247,7 +247,28 @@ that opens a network connection on an EV driver's behalf.
 The transports are tried in the order the live link states them, or in the order the
 application prefers. Within a transport, addresses are chosen the way DNS chooses
 service records — lower `priority` first, equal priorities drawn in proportion to their
-`weight` — and an address that never answers is passed over for the next.
+`weight` — and an address that never answers is passed over for the next. An `https`
+transport may state a `refresh` period, which is how often the station itself thinks it
+is worth asking again; the client's own interval applies only where a document says
+nothing.
+
+A live link may also carry the signed meter values measured so far, and those are
+evidence like any other — no request, no observation, they are in the document already:
+
+```csharp
+var meterValues = detector.TryToParseLiveLinkMeterValues(liveLink);
+
+if (meterValues is not null)
+    Console.WriteLine($"{meterValues.ChargingSessions[0].Measurements[0].Values.Count} readings so far");
+```
+
+They come back as an ordinary charge transparency record, verified through the same
+pipeline, using the public keys the very same document carries — regularly more than
+one of them, because a session's start and end value are often signed by the meter while
+the readings in between are signed by the operator. The live link stays a live link: it
+describes a charging session that is still running, a record a collection of finished
+ones, and an application shows the two differently. A link that has measured nothing yet
+yields `null`.
 
 Where a transport is protected by a time-based one-time password, the current one is
 sent in the `TOTP` header of every request. The scheme is the one of the
@@ -335,12 +356,13 @@ records, so their bytes are what is under test, and a Windows checkout rewrites 
 endings by default. [`.gitattributes`](.gitattributes) prevents that, and the Windows leg
 is what proves it — before building, every tracked file on disk is compared against the
 bytes the repository holds. The GitHub Windows image runs with `core.autocrlf=true` and
-does rewrite 199 of the repository's other files; all 204 fixtures come through untouched.
+does rewrite the repository's other files — 199 of them the last time the leg reported a
+count; all 236 fixtures come through untouched.
 
 A [nightly workflow](.github/workflows/nightly.yml) runs the same suite again when nobody
 pushed, because Styx and Hermod are not pinned — they are sibling checkouts of master, so a
 breaking change there is a red night with nothing in this repository having moved. It also
-compares all 204 fixtures with `ChargyCore.TS` byte for byte, which is the one half of the
+compares all 236 fixtures with `ChargyCore.TS` byte for byte, which is the one half of the
 parity contract neither test suite can check on its own: each only ever sees its own copy.
 
 All cryptography is provided by [BouncyCastle](https://www.bouncycastle.org/) — ECDSA over

@@ -178,6 +178,142 @@ namespace cloud.charging.open.chargy.IO
         #endregion
 
 
+        #region TryToParseLiveLinkMeterValues(LiveLink)
+
+        /// <summary>
+        /// The signed meter values a live link carries, parsed and verified with
+        /// the public keys of the very same document, as an ordinary charge
+        /// transparency record.
+        ///
+        /// A live link is not turned into one: it describes a charging session
+        /// that is still running, a charge transparency record a collection of
+        /// finished ones, and an application shows the two differently. The meter
+        /// values are an optional part of the live link view, so they are only
+        /// produced when they are asked for.
+        /// </summary>
+        /// <param name="LiveLink">A charge transparency live link.</param>
+        /// <returns>
+        /// A verified <see cref="ChargeTransparencyRecord"/>, or <c>null</c> when
+        /// the live link carries no meter values yet — the normal state of the
+        /// first document of a series — or none that are understood here.
+        /// </returns>
+        public ChargeTransparencyRecord? TryToParseLiveLinkMeterValues(ChargeTransparencyLiveLink LiveLink)
+        {
+
+            if (LiveLink.OriginalJSON?["signedMeterValues"] is not JObject signedMeterValues)
+                return null;
+
+            #region Only the plain textual OCMF form is understood here
+
+            // Anything else — base64, a different meter value format — is left
+            // alone rather than guessed at.
+            if (signedMeterValues["encodings"] is not JArray encodings ||
+                encodings.Count == 0                                   ||
+                encodings[0].Value<String>() != "OCMF")
+            {
+                return null;
+            }
+
+            if (signedMeterValues["values"] is not JArray values ||
+                values.Count == 0                                ||
+                values.Any(value => value.Type != JTokenType.String ||
+                                    value.Value<String>()!.Length == 0))
+            {
+                return null;
+            }
+
+            #endregion
+
+            // The meter values are OCMF, so they are read by the OCMF format this
+            // detector was given. An application that left that slot empty does
+            // not vouch for OCMF and gets no meter values, which is what an empty
+            // slot is for.
+            if (Formats.OCMF is not IMultiDocumentChargeTransparencyFormat ocmf)
+                return null;
+
+            var publicKeys  = CollectLiveLinkMeterValueKeys(LiveLink);
+
+            var result      = ocmf.TryParseTexts(
+                                  values.Select(value => value.Value<String>()!),
+                                  publicKeys.Count > 0 ? publicKeys : null
+                              );
+
+            // A meter value section that cannot be read must not cost us the live
+            // link itself: the transports still work, there is just nothing to
+            // show. And what can be read goes through the very same verification
+            // every other charge transparency record does, so the meter values
+            // arrive with their crypto results.
+            return result is ChargeTransparencyRecord record
+                       ? new ChargeTransparencyRecordProcessor(I18N, ValidationRules).Process(record)
+                       : null;
+
+        }
+
+        #endregion
+
+        #region (private, static) CollectLiveLinkMeterValueKeys(LiveLink)
+
+        /// <summary>
+        /// Every public key of the document that is allowed to sign meter values.
+        ///
+        /// A charging session is regularly signed by more than one of them: the
+        /// meter signs its start and end values, the operator the intermediate
+        /// ones, and an operator may hold several keys at a time while rotating
+        /// them.
+        /// </summary>
+        /// <param name="LiveLink">A charge transparency live link.</param>
+        private static IReadOnlyList<String> CollectLiveLinkMeterValueKeys(ChargeTransparencyLiveLink LiveLink)
+        {
+
+            var publicKeys = new List<String>();
+
+            void CollectFrom(JToken? Candidates)
+            {
+
+                if (Candidates is not JArray candidates)
+                    return;
+
+                foreach (var candidate in candidates.OfType<JObject>())
+                {
+
+                    if (candidate["value"]?.Value<String>() is not String value ||
+                        value.Length == 0)
+                    {
+                        continue;
+                    }
+
+                    // The key has to be hexadecimal, because that is the encoding
+                    // it is passed on with below.
+                    if (candidate["encodings"] is JArray keyEncodings &&
+                        keyEncodings.LastOrDefault()?.Value<String>() != "hex")
+                    {
+                        continue;
+                    }
+
+                    if (candidate["keyUsage"] is JArray keyUsage &&
+                       !keyUsage.Any(usage => usage.Value<String>() == "signMeterValues" ||
+                                              usage.Value<String>() == "signEnergyMeterValues"))
+                    {
+                        continue;
+                    }
+
+                    publicKeys.Add(value);
+
+                }
+
+            }
+
+            var document = LiveLink.OriginalJSON;
+
+            CollectFrom(document?["chargingStationOperator"]?["publicKeys"]);
+            CollectFrom(document?["chargingStation"]?["EVSE"]?["energyMeter"]?["publicKeys"]);
+
+            return publicKeys;
+
+        }
+
+        #endregion
+
         #region (private) Processed(Result)
 
         /// <summary>
@@ -721,9 +857,10 @@ namespace cloud.charging.open.chargy.IO
             if (ChargeTransparencyLiveLink.IsAChargeTransparencyLiveLink(json))
             {
 
-                // A live link without a timestamp is stamped on arrival, so that
-                // an application can tell how old the information it shows is.
-                json["timestamp"] ??= DateTimeOffset.UtcNow.ToString("yyyy-MM-ddTHH:mm:ss.fffZ");
+                // A live link without a creation timestamp is stamped on arrival,
+                // so that an application can tell how old the information it
+                // shows is.
+                json["created"] ??= DateTimeOffset.UtcNow.ToString("yyyy-MM-ddTHH:mm:ss.fffZ");
 
                 if (ChargeTransparencyLiveLink.TryParse(json, out var liveLink) &&
                     liveLink is not null)

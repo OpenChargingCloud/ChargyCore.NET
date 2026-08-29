@@ -67,7 +67,7 @@ namespace cloud.charging.open.chargy.tests.CLI
             // The program takes paths, so some of these tests need real files.
             // They go somewhere temporary rather than next to the fixtures: the
             // scaffolding tests count what is in there, and a file this fixture
-            // left behind would be counted as a 205th fixture.
+            // left behind would be counted as a 237th fixture.
             temporaryDirectory  = Directory.CreateTempSubdirectory("chargy-verify-tests-").FullName;
 
             Console.SetOut  (output);
@@ -141,6 +141,62 @@ namespace cloud.charging.open.chargy.tests.CLI
                 Assert.That(Printed,           Does.Not.Contain("NOT verified"));
                 Assert.That(errors.ToString(), Is.Empty);
 
+            });
+
+        }
+
+        #endregion
+
+        #region ALiveLinkIsReportedWithTheReadingsItCarries()
+
+        /// <summary>
+        /// A live link is printed as what it is — a list of addresses — and the
+        /// signed meter values it already carries are verified and reported
+        /// alongside it.
+        ///
+        /// Those readings are in the file. Reading them costs no network request
+        /// and tells nobody's operator anything, so a report that said "nothing
+        /// here has been verified" while the document held twenty valid
+        /// signatures would simply be untrue.
+        /// </summary>
+        [Test]
+        public async Task ALiveLinkIsReportedWithTheReadingsItCarries()
+        {
+
+            var exitCode = await Run(FixturePath("ChargeTransparencyLive/ChargeTransparencyLiveLink_1.json"));
+
+            Assert.Multiple(() => {
+
+                Assert.That(exitCode,  Is.EqualTo(Program.ExitVerified), Printed);
+
+                Assert.That(Printed,   Does.Contain("A charge transparency live link."));
+                Assert.That(Printed,   Does.Contain("asks again every 10 seconds"));
+
+                Assert.That(Printed,   Does.Contain("Charging session 1: verified"));
+                Assert.That(Printed,   Does.Contain("ENERGY_TOTAL: 20 reading(s), 20 with a valid signature"));
+
+            });
+
+        }
+
+        #endregion
+
+        #region ALiveLinkWithoutReadingsIsStillReported()
+
+        /// <summary>
+        /// The first document of a series says everything about the station and
+        /// has measured nothing yet. That is not a failure.
+        /// </summary>
+        [Test]
+        public async Task ALiveLinkWithoutReadingsIsStillReported()
+        {
+
+            var exitCode = await Run(FixturePath("ChargeTransparencyLive/OCMF-Test-01/OCMF-Test-01__0000.json"));
+
+            Assert.Multiple(() => {
+                Assert.That(exitCode,  Is.EqualTo(Program.ExitVerified), Printed);
+                Assert.That(Printed,   Does.Contain("A charge transparency live link."));
+                Assert.That(Printed,   Does.Not.Contain("Charging session"));
             });
 
         }

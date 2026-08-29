@@ -156,8 +156,8 @@ namespace cloud.charging.open.chargy.LiveLink
         {
 
             var transports = Transports is null
-                                 ? LiveLink.Transports
-                                 : [.. Transports.Select   (type      => LiveLink.Transports.FirstOrDefault(transport => transport.Type == type)).
+                                 ? LiveLink.LiveTransports
+                                 : [.. Transports.Select   (type      => LiveLink.LiveTransports.FirstOrDefault(transport => transport.Type == type)).
                                                   OfType<Transport>()];
 
             foreach (var transport in transports)
@@ -205,13 +205,19 @@ namespace cloud.charging.open.chargy.LiveLink
         /// happened, so it asks. That is the least good of the three and the most
         /// likely to work: it is an ordinary request, and it survives the proxies
         /// and firewalls that a long-lived connection does not.
+        ///
+        /// How often to ask is the station's answer where it gives one — that is
+        /// what a transport's "refresh" is for, and it knows how often its meter
+        /// takes a reading. Only when the document says nothing does the interval
+        /// this client was configured with apply.
         /// </summary>
         private async IAsyncEnumerable<LiveLinkUpdate> Poll(Transport                                   Transport,
                                                             String                                      Endpoint,
                                                             [EnumeratorCancellation] CancellationToken  CancellationToken)
         {
 
-            var answered = false;
+            var answered  = false;
+            var interval  = Transport.Refresh ?? PollingInterval;
 
             while (!CancellationToken.IsCancellationRequested)
             {
@@ -239,7 +245,7 @@ namespace cloud.charging.open.chargy.LiveLink
 
                 try
                 {
-                    await Task.Delay(PollingInterval, CancellationToken).ConfigureAwait(false);
+                    await Task.Delay(interval, CancellationToken).ConfigureAwait(false);
                 }
                 catch (OperationCanceledException)
                 {

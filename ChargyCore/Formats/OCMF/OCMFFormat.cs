@@ -42,7 +42,7 @@ namespace cloud.charging.open.chargy.Formats.OCMF
     /// payload itself — which is also why so little of it is optional to get right.
     /// </summary>
     /// <param name="I18N">The dictionary used to describe what went wrong.</param>
-    public partial class OCMFFormat(I18NDictionary I18N) : ITextChargeTransparencyFormat
+    public partial class OCMFFormat(I18NDictionary I18N) : IMultiDocumentChargeTransparencyFormat
     {
 
         #region Data
@@ -108,7 +108,27 @@ namespace cloud.charging.open.chargy.Formats.OCMF
 
         #endregion
 
-        #region TryParse    (OCMFDocuments, PublicKey, PublicKeyEncoding, ContainerInfos)
+        #region TryParseTexts(Texts, PublicKeysHEX = null)
+
+        /// <summary>
+        /// Try to read one charging session from several OCMF documents, verified
+        /// against several candidate public keys.
+        /// </summary>
+        /// <param name="Texts">Texts holding OCMF documents.</param>
+        /// <param name="PublicKeysHEX">The candidate public keys, hexadecimal.</param>
+        public Object TryParseTexts(IEnumerable<String>   Texts,
+                                    IEnumerable<String>?  PublicKeysHEX = null)
+
+            => TryParse(
+                   Texts,
+                   PublicKeysHEX,
+                   PublicKeysHEX is not null ? "hex" : null,
+                   null
+               );
+
+        #endregion
+
+        #region TryParse    (OCMFDocuments, PublicKey,  PublicKeyEncoding, ContainerInfos)
 
         /// <summary>
         /// Try to read a charge transparency record from one or more OCMF documents.
@@ -121,6 +141,36 @@ namespace cloud.charging.open.chargy.Formats.OCMF
                                String?              PublicKey,
                                String?              PublicKeyEncoding,
                                ContainerInfos?      ContainerInfos)
+
+            => TryParse(
+                   OCMFDocuments,
+                   PublicKey is null ? null : new[] { PublicKey },
+                   PublicKeyEncoding,
+                   ContainerInfos
+               );
+
+        #endregion
+
+        #region TryParse    (OCMFDocuments, PublicKeys, PublicKeyEncoding, ContainerInfos)
+
+        /// <summary>
+        /// Try to read a charge transparency record from one or more OCMF
+        /// documents, verified against one or more candidate public keys.
+        ///
+        /// Several keys are not an exotic case: many meters sign the start and
+        /// the end value of a session with a different key than the intermediate
+        /// ones, and an operator may hold more than one key at a time while
+        /// rotating them. Each document is tried against every candidate and
+        /// keeps the first signature that verifies.
+        /// </summary>
+        /// <param name="OCMFDocuments">Texts holding OCMF documents.</param>
+        /// <param name="PublicKeys">The candidate public keys, when any arrived.</param>
+        /// <param name="PublicKeyEncoding">How the public keys are encoded, when known.</param>
+        /// <param name="ContainerInfos">What the surrounding container knew, if anything.</param>
+        public Object TryParse(IEnumerable<String>   OCMFDocuments,
+                               IEnumerable<String>?  PublicKeys,
+                               String?               PublicKeyEncoding,
+                               ContainerInfos?       ContainerInfos)
         {
 
             var scanned = scanner.Scan(OCMFDocuments);
@@ -131,11 +181,13 @@ namespace cloud.charging.open.chargy.Formats.OCMF
                            i18n.GetMultilanguageText(scanned.ErrorMessage ?? "UnknownOrInvalidChargingSessionFormat")
                        );
 
+            var publicKeys = PublicKeys?.ToArray() ?? [];
+
             // The signature is checked before anything is made of the payload, so
             // that what an EV driver is shown and whether it is trustworthy are
             // decided from the same reading of the document.
             foreach (var document in scanned.Documents)
-                validator.Validate(document, PublicKey, PublicKeyEncoding);
+                validator.Validate(document, publicKeys, PublicKeyEncoding);
 
             // Documents that disagree about who was charging, on which meter, are
             // not one charging session however they arrived. The first group is

@@ -85,6 +85,34 @@ namespace cloud.charging.open.chargy.IO
 
 
     /// <summary>
+    /// A text charge transparency format that can read a whole charging session
+    /// at once: several documents, verified against several candidate public keys.
+    ///
+    /// Both halves are needed together. A charging session arrives as one
+    /// document per reading, and it is regularly signed by more than one key —
+    /// many meters sign the start and the end value with a different key than
+    /// the intermediate ones, and an operator may hold several keys at a time
+    /// while rotating them. A format that only ever sees one document and one
+    /// key cannot verify such a session at all.
+    /// </summary>
+    public interface IMultiDocumentChargeTransparencyFormat : ITextChargeTransparencyFormat
+    {
+
+        /// <summary>
+        /// Try to read one charging session from several documents.
+        /// </summary>
+        /// <param name="Texts">The documents, in the order they were written.</param>
+        /// <param name="PublicKeysHEX">
+        /// The candidate public keys, hexadecimal. Every document is tried
+        /// against each of them and keeps the first signature that verifies.
+        /// </param>
+        Object TryParseTexts(IEnumerable<String>   Texts,
+                             IEnumerable<String>?  PublicKeysHEX = null);
+
+    }
+
+
+    /// <summary>
     /// A charge transparency data format written as JSON.
     /// </summary>
     public interface IJSONChargeTransparencyFormat : IChargeTransparencyFormat

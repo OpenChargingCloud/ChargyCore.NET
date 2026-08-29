@@ -17,9 +17,13 @@
 
 #region Usings
 
+using System.Globalization;
+
 using Newtonsoft.Json;
 
 using org.GraphDefined.Vanaheimr.Illias;
+
+using cloud.charging.open.chargy.IO;
 
 #endregion
 
@@ -35,14 +39,20 @@ namespace cloud.charging.open.chargy.cli
     /// </summary>
     /// <param name="I18N">The dictionary the messages are localised through.</param>
     /// <param name="Out">Where to write.</param>
-    public class Report(I18NDictionary  I18N,
-                        TextWriter      Out)
+    /// <param name="Detector">
+    /// The pipeline the files came through, used to read the signed meter values
+    /// a live link may carry. Without it such a link is printed without them.
+    /// </param>
+    public class Report(I18NDictionary          I18N,
+                        TextWriter              Out,
+                        ContentFormatDetector?  Detector = null)
     {
 
         #region Data
 
-        private readonly I18NDictionary  i18n  = I18N;
-        private readonly TextWriter      output   = Out;
+        private readonly I18NDictionary          i18n      = I18N;
+        private readonly TextWriter              output    = Out;
+        private readonly ContentFormatDetector?  detector  = Detector;
 
         #endregion
 
@@ -239,7 +249,8 @@ namespace cloud.charging.open.chargy.cli
         #region (private) PrintLiveLink  (LiveLink, AsJSON)
 
         /// <summary>
-        /// Say where the live data of a charging station can be reached.
+        /// Say where the live data of a charging station can be reached, and what
+        /// of it the link already carries.
         /// </summary>
         /// <param name="LiveLink">A charge transparency live link.</param>
         /// <param name="AsJSON">Whether to print the link itself.</param>
@@ -253,23 +264,30 @@ namespace cloud.charging.open.chargy.cli
                 return Program.ExitVerified;
             }
 
+            // A live link describes a charging session that is still running, and
+            // may carry the readings taken so far. Those are signed meter values
+            // like any other, and they are in the file already — reading them
+            // costs nobody a network request and tells nobody's operator
+            // anything.
+            var meterValues = detector?.TryToParseLiveLinkMeterValues(LiveLink);
+
             output.WriteLine("A charge transparency live link.");
             output.WriteLine();
-            output.WriteLine("This is not charging data but a pointer to some — nothing here has");
-            output.WriteLine("been verified, and following any of these addresses tells the operator");
-            output.WriteLine("that somebody is looking at this charging station.");
+            output.WriteLine("The addresses below are a pointer to charging data rather than the data");
+            output.WriteLine("itself, and following any of them tells the operator that somebody is");
+            output.WriteLine("looking at this charging station.");
             output.WriteLine();
 
             if (i18n.GetLocalizedText(LiveLink.Description) is String description)
                 output.WriteLine($"  {description}");
 
-            if (LiveLink.Timestamp is String timestamp)
-                output.WriteLine($"  as of:      {timestamp}");
+            if (LiveLink.Created is String created)
+                output.WriteLine($"  as of:      {created}");
 
             if (LiveLink.GeoLocation is not null)
                 output.WriteLine($"  located at: {LiveLink.GeoLocation}");
 
-            foreach (var transport in LiveLink.Transports)
+            foreach (var transport in LiveLink.LiveTransports)
             {
 
                 output.WriteLine($"  {transport.Type.AsText()}:");
@@ -280,9 +298,28 @@ namespace cloud.charging.open.chargy.cli
                 if (transport.TOTP is not null)
                     output.WriteLine($"    (behind a one-time password, changing every {transport.TOTP.TimeStep} seconds)");
 
+                if (transport.Refresh is TimeSpan refresh)
+                    output.WriteLine($"    (asks again every {refresh.TotalSeconds.ToString(CultureInfo.InvariantCulture)} seconds)");
+
             }
 
-            return Program.ExitVerified;
+            #region ..., and the readings the link already carries
+
+            if (meterValues is null)
+                return Program.ExitVerified;
+
+            output.WriteLine();
+            output.WriteLine("The link also carries the signed meter values measured so far. The");
+            output.WriteLine("charging session is not finished, so this is what has been proven up");
+            output.WriteLine("to now rather than a final receipt.");
+            output.WriteLine();
+
+            // The exit code follows the readings, not the addresses: a link whose
+            // meter values do not hold up has handed over charging data that does
+            // not verify, whatever else it points at.
+            return PrintRecord(meterValues);
+
+            #endregion
 
         }
 

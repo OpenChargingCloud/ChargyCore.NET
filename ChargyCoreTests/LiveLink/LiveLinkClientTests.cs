@@ -323,7 +323,7 @@ namespace cloud.charging.open.chargy.tests.LiveLink
             using var eventStream  = new LocalHTTPService(Payload, EventCount: 3);
 
             var liveLink = new ChargeTransparencyLiveLink(
-                               Transports: [
+                               LiveTransports: [
                                    new Transport(TransportType.HTTPS,    polling.URL),
                                    new Transport(TransportType.HTTPSSE,  eventStream.URL)
                                ]
@@ -371,7 +371,7 @@ namespace cloud.charging.open.chargy.tests.LiveLink
         /// <summary>A live link offering exactly one transport.</summary>
         private static ChargeTransparencyLiveLink LiveLinkFor(Transport Transport)
 
-            => new (Transports: [ Transport ]);
+            => new (LiveTransports: [ Transport ]);
 
         /// <summary>A loopback TCP port nobody is using, asked of the operating system.</summary>
         private static Int32 FreeLoopbackPort()

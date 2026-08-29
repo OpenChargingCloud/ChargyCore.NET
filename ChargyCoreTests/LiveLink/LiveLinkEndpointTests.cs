@@ -166,8 +166,8 @@ namespace cloud.charging.open.chargy.tests.LiveLink
         #region TheFixtureIsOrderedTheWayItReads()
 
         /// <summary>
-        /// The live link fixture, ordered: two hosts sharing the load and a third
-        /// one behind them.
+        /// The live link fixture, ordered: two hosts of the same priority
+        /// sharing the load between them.
         /// </summary>
         [Test]
         public async Task TheFixtureIsOrderedTheWayItReads()
@@ -178,17 +178,16 @@ namespace cloud.charging.open.chargy.tests.LiveLink
             Assert.That(result, Is.InstanceOf<ChargeTransparencyLiveLink>(), VerificationReport.Format(result));
 
             var endpoints = LiveLinkEndpoints.InPreferenceOrder(
-                                ((ChargeTransparencyLiveLink) result).Transports[1],
+                                ((ChargeTransparencyLiveLink) result).LiveTransports[1],
                                 new Random(1)
                             );
 
             Assert.Multiple(() => {
-                Assert.That(endpoints,             Has.Count.EqualTo(3));
-                Assert.That(endpoints.Take(2),     Is.EquivalentTo(new[] {
-                                                       "wss://api1.example.com/chargingSessions/1234567890/transparency/live",
-                                                       "wss://api2.example.com/chargingSessions/1234567890/transparency/live"
+                Assert.That(endpoints,             Has.Count.EqualTo(2));
+                Assert.That(endpoints,             Is.EquivalentTo(new[] {
+                                                       "wss://api1.example.com/chargingSessions/OCMF-Test-01/transparency/live",
+                                                       "wss://api2.example.com/chargingSessions/OCMF-Test-01/transparency/live"
                                                    }));
-                Assert.That(endpoints[2],          Is.EqualTo("wss://api3.example.com/chargingSessions/1234567890/transparency/live"));
             });
 
         }

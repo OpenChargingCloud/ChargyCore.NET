@@ -149,7 +149,7 @@ namespace cloud.charging.open.chargy.cli
 
             var result    = await detector.DetectAndConvertContentFormat(files).ConfigureAwait(false);
 
-            return new Report(i18n, Console.Out).Print(result, commandLine.AsJSON);
+            return new Report(i18n, Console.Out, detector).Print(result, commandLine.AsJSON);
 
         }
 

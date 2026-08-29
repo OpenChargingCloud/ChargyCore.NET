@@ -198,7 +198,7 @@ namespace cloud.charging.open.chargy.tests.Formats
 
             var document = scanner.Scan([ ReadTextFixture("OCMF/OCMF-Testdata-01.ocmf") ]).Documents[0];
 
-            Assert.That(validator.Validate(document, null),
+            Assert.That(validator.Validate(document, (String?) null),
                         Is.EqualTo(VerificationResult.PublicKeyNotFound));
 
         }

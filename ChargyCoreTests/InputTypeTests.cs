@@ -185,12 +185,12 @@ namespace cloud.charging.open.chargy.tests
             var json = JObject.Parse("""
                 {
                     "@context":    "https://open.charging.cloud/contexts/chargeTransparency/live/link/1.0",
-                    "timestamp":   "2026-08-14T12:00:00.000Z",
+                    "created":     "2026-08-14T12:00:00.000Z",
                     "description": { "en": "Charging station 1" },
                     "geoLocation": { "lat": 50.9, "lng": 11.6 },
                     "connector":   { "standard": "IEC_62196_T2", "powerType": "AC_3_PHASE" },
-                    "transports": [
-                        { "type": "https",     "url": "https://station.example/live" },
+                    "liveTransports": [
+                        { "type": "https",     "url": "https://station.example/live", "refresh": 15 },
                         { "type": "httpSSE",   "urls": [ "https://station.example/sse", { "url": "https://backup.example/sse", "priority": 10 } ] },
                         { "type": "websocket", "url": "wss://station.example/ws", "totp": { "initialSharedSecret": "ABC", "timeStep": 30 } }
                     ]
@@ -202,19 +202,23 @@ namespace cloud.charging.open.chargy.tests
 
             Assert.Multiple(() => {
 
-                Assert.That(link!.Transports,                  Has.Count.EqualTo(3));
-                Assert.That(link. Transports[0].Type,          Is.EqualTo(TransportType.HTTPS));
-                Assert.That(link. Transports[1].Type,          Is.EqualTo(TransportType.HTTPSSE));
-                Assert.That(link. Transports[2].Type,          Is.EqualTo(TransportType.WebSocket));
+                Assert.That(link!.LiveTransports,                  Has.Count.EqualTo(3));
+                Assert.That(link. LiveTransports[0].Type,          Is.EqualTo(TransportType.HTTPS));
+                Assert.That(link. LiveTransports[1].Type,          Is.EqualTo(TransportType.HTTPSSE));
+                Assert.That(link. LiveTransports[2].Type,          Is.EqualTo(TransportType.WebSocket));
+
+                // How often to ask again belongs to https, and only there is it read.
+                Assert.That(link. LiveTransports[0].Refresh,       Is.EqualTo(TimeSpan.FromSeconds(15)));
+                Assert.That(link. LiveTransports[1].Refresh,       Is.Null);
 
                 // A bare URL string and an object with a priority are both endpoints.
-                Assert.That(link. Transports[1].URLs,          Has.Count.EqualTo(2));
-                Assert.That(link. Transports[1].URLs[0].URL,   Is.EqualTo("https://station.example/sse"));
-                Assert.That(link. Transports[1].URLs[1].Priority,  Is.EqualTo(10));
+                Assert.That(link. LiveTransports[1].URLs,          Has.Count.EqualTo(2));
+                Assert.That(link. LiveTransports[1].URLs[0].URL,   Is.EqualTo("https://station.example/sse"));
+                Assert.That(link. LiveTransports[1].URLs[1].Priority,  Is.EqualTo(10));
 
-                Assert.That(link. Transports[2].TOTP?.TimeStep,    Is.EqualTo(30));
-                Assert.That(link. Connector?.Standard,             Is.EqualTo("IEC_62196_T2"));
-                Assert.That(link. GeoLocation?.Latitude.Value,     Is.EqualTo(50.9));
+                Assert.That(link. LiveTransports[2].TOTP?.TimeStep,    Is.EqualTo(30));
+                Assert.That(link. Connector?.Standard,                 Is.EqualTo("IEC_62196_T2"));
+                Assert.That(link. GeoLocation?.Latitude.Value,         Is.EqualTo(50.9));
 
             });
 
@@ -232,12 +236,42 @@ namespace cloud.charging.open.chargy.tests
             // is worse than no link at all.
             var json = JObject.Parse("""
                 {
-                    "@context":   "https://open.charging.cloud/contexts/chargeTransparency/live/link/1.0",
-                    "transports": [ { "type": "carrier-pigeon", "url": "https://station.example/live" } ]
+                    "@context":       "https://open.charging.cloud/contexts/chargeTransparency/live/link/1.0",
+                    "liveTransports": [ { "type": "carrier-pigeon", "url": "https://station.example/live" } ]
                 }
                 """);
 
             Assert.That(ChargeTransparencyLiveLink.TryParse(json, out _),  Is.False);
+
+        }
+
+        #endregion
+
+        #region The_old_property_names_are_read_by_nobody()
+
+        [Test]
+        public void The_old_property_names_are_read_by_nobody()
+        {
+
+            // Upstream 0.13.0 renamed "timestamp" to "created" and "transports"
+            // to "liveTransports", deliberately without a fallback. Both are
+            // optional, so a document still using the old names is a live link —
+            // it simply says nothing this reader looks at, right down to a
+            // transport that would have been rejected under the new name.
+            var json = JObject.Parse("""
+                {
+                    "@context":   "https://open.charging.cloud/contexts/chargeTransparency/live/link/1.0",
+                    "timestamp":  "2026-08-14T12:00:00.000Z",
+                    "transports": [ { "type": "carrier-pigeon", "url": "https://station.example/live" } ]
+                }
+                """);
+
+            Assert.That(ChargeTransparencyLiveLink.TryParse(json, out var link),  Is.True);
+
+            Assert.Multiple(() => {
+                Assert.That(link!.Created,         Is.Null);
+                Assert.That(link. LiveTransports,  Is.Empty);
+            });
 
         }
 

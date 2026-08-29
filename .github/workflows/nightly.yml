@@ -123,7 +123,7 @@ jobs:
           path: ChargyCore.NET/artifacts/*.trx
 
   fixture-parity:
-    # The 204 test fixtures — signed charge transparency records and the golden
+    # The 236 test fixtures — signed charge transparency records and the golden
     # verification reports both implementations have to reproduce — are shared
     # byte for byte with OpenChargingCloud/ChargyCore.TS. That is the parity
     # contract of this port, and it is the one part of it no test in either

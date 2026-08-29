@@ -60,8 +60,8 @@ namespace cloud.charging.open.chargy.tests
             if (Result is ChargeTransparencyLiveLink liveLink)
                 return String.Join("\n", [
                            "format: charge-transparency-live-link",
-                           $"timestamp: {liveLink.Timestamp ?? ""}",
-                           $"transports: {liveLink.Transports.Count}"
+                           $"created: {liveLink.Created ?? ""}",
+                           $"liveTransports: {liveLink.LiveTransports.Count}"
                        ]);
 
             if (Result is SimpleURL url)

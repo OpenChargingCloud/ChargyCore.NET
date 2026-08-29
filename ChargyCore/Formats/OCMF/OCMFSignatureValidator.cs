@@ -57,7 +57,60 @@ namespace cloud.charging.open.chargy.Formats.OCMF
         #endregion
 
 
-        #region Validate(Document, PublicKey, PublicKeyEncoding = null)
+        #region Validate(Document, PublicKeys, PublicKeyEncoding = null)
+
+        /// <summary>
+        /// Check the signature of an OCMF document against several candidate
+        /// public keys, keeping the first one that verifies.
+        ///
+        /// A charging session is regularly signed by more than one key: some
+        /// meters sign their start and end values with a different key than the
+        /// intermediate ones, and an operator may hold several keys at once while
+        /// rotating them. Without trying each of them, such a session could never
+        /// validate as a whole.
+        /// </summary>
+        /// <param name="Document">An OCMF document.</param>
+        /// <param name="PublicKeys">The candidate public keys.</param>
+        /// <param name="PublicKeyEncoding">How the public keys are encoded, when known.</param>
+        public VerificationResult Validate(OCMFDocument         Document,
+                                           IEnumerable<String>  PublicKeys,
+                                           String?              PublicKeyEncoding = null)
+        {
+
+            var candidates  = PublicKeys.Where(publicKey => publicKey.Length > 0).ToArray();
+
+            if (candidates.Length == 0)
+                return Validate(Document, (String?) null, PublicKeyEncoding);
+
+            var lastResult  = VerificationResult.Unvalidated;
+
+            foreach (var publicKey in candidates)
+            {
+
+                // A failed attempt must not leave its verdict, its errors or its
+                // key behind for the next one — nor for the report, if the last
+                // candidate is the one that verifies.
+                Document.ValidationStatus   = VerificationResult.Unvalidated;
+                Document.PublicKey          = null;
+                Document.PublicKeyEncoding  = null;
+                Document.PublicKeyX         = null;
+                Document.PublicKeyY         = null;
+                Document.Errors.Clear();
+
+                lastResult = Validate(Document, publicKey, PublicKeyEncoding);
+
+                if (lastResult == VerificationResult.ValidSignature)
+                    return lastResult;
+
+            }
+
+            return lastResult;
+
+        }
+
+        #endregion
+
+        #region Validate(Document, PublicKey,  PublicKeyEncoding = null)
 
         /// <summary>
         /// Check the signature of an OCMF document against the given public key.

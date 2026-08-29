@@ -22,7 +22,7 @@ Source inventory of ChargyCore.TS:
 | Data model & helpers | `interfaces/*`, `ACrypt`, `SignatureCrypto`, `OCPI` | ~4,900 |
 | **Total source** | 34 files | **~23,600** |
 | Tests | 28 spec files | ~4,300 |
-| Test fixtures | 204 files, of which **25 are `*.expected.txt` golden reports** | — |
+| Test fixtures | 236 files, of which **25 are `*.expected.txt` golden reports** | — |
 
 Expected C# size: roughly 28,000–35,000 LOC, because the C# data model uses the
 GraphDefined house style (`ToJSON()` / `TryParse()` per class) instead of bare
@@ -145,7 +145,7 @@ ChargyCore.NET/
     ├── Formats/                        one test class per format
     ├── Containers/
     ├── Crypto/
-    └── TestData/                       all 204 fixtures copied 1:1
+    └── TestData/                       all 236 fixtures copied 1:1
 ```
 
 **Namespace / assembly:** `cloud.charging.open.chargy` (+ `.DataStructures`, `.Crypto`,
@@ -335,7 +335,7 @@ as a hard, automatically-checked contract — not a hope.
 
 * NUnit 4.6.1 + NUnit3TestAdapter 6.2.0 + Microsoft.NET.Test.Sdk 18.8.1 (identical to StyxTests)
 * `<Using Include="NUnit.Framework" />`
-* All 204 fixtures under `TestData/`, `CopyToOutputDirectory="PreserveNewest"`
+* All 236 fixtures under `TestData/`, `CopyToOutputDirectory="PreserveNewest"`
 * One `[TestFixture]` per TS spec file, ~151 test cases total:
 
 | TS spec | NUnit fixture | cases |
@@ -348,7 +348,7 @@ as a hard, automatically-checked contract — not a hope.
 | `SAFE.tests.ts`, `CanonicalJSON.test.ts` | `Containers/SAFEXMLTests`, `Crypto/CanonicalJSONTests` | 8 each |
 | `Mennekes` | … | 7 |
 | `SimpleURLs` | `IO/SimpleURLTests` | 7 → 9 |
-| `ChargeTransparencyLiveLink` | `ChargeTransparencyLiveLinkTests` | 3 → 4 |
+| `ChargeTransparencyLiveLink` | `ChargeTransparencyLiveLinkTests` | 3 → 10 |
 | `ChargePoint`, `EMHCrypt01`, `OCMFVersions`, `SAFE_withChargyExtensions` | … | 6 each |
 | `OCMFSessionIdentity` | `Formats/OCMFSessionIdentityTests` | 6 → 7 |
 | `PublicKeyFiles` | … | 5 |
@@ -381,13 +381,14 @@ Git repo, AGPL `LICENSE`, `README.md`, `SECURITY.md`, `CONTRIBUTING.md`,
 `ChargyCore.slnx` + both `.csproj` files with the Hermod/Styx project references,
 `i18n.json` + `validationRules.json` as embedded resources, all fixtures copied
 into `ChargyCoreTests/TestData/` — 203 of them at the time, 204 since the v0.12.0
-sync in `f3bab3c` (see §7b).
+sync in `f3bab3c`, and 236 since v0.13.0 brought the OCMF-Test-01 live link series
+(see §7b).
 
 Two additions over the original plan:
 
 * `ChargyResources` and `AChargyTests` were written already, so Phase 0 could ship
   **8 scaffolding tests** instead of an empty test run. They assert that the embedded
-  resources parse, that all 204 fixtures and all 25 golden reports reach the output
+  resources parse, that all 236 fixtures and all 25 golden reports reach the output
   directory, that binary fixtures survive byte-exactly (ZIP magic intact) and that the
   golden reports carry no CRLF. An empty green test run would have proven nothing.
 * `.gitattributes` marks `ChargyCoreTests/TestData/**` as `-text`. End-of-line
@@ -400,7 +401,7 @@ Two additions over the original plan:
 > Note: `TestData/dataStructures.ts` and `TestData/OCMF/versionTestData.ts` are
 > TypeScript *test data definitions*, not charge transparency fixtures. They are kept
 > as the reference for the C# table-driven fixtures written in Phase 1 and Phase 4,
-> and are part of the 204 files asserted above. `versionTestData.ts` is now mirrored
+> and are part of the 236 files asserted above. `versionTestData.ts` is now mirrored
 > by `ChargyCoreTests/Formats/OCMFVersionTestData.cs`, whose seeded generator is the
 > same one bit for bit — so both implementations are fed the same generated documents.
 
@@ -658,7 +659,7 @@ infrastructure. Every step is a self-contained increment: format + its `ACrypt` 
    layer's job at the moment of presentation.
 
 ### Phase 5 — Live link & online features ✅ **done, as far as there is anything to port**
-→ `ChargeTransparencyLiveLinkTests` (4), `SimpleURLTests` (9).
+→ `ChargeTransparencyLiveLinkTests` (10), `SimpleURLTests` (9).
 
 Most of this arrived with the Phase 3 detector and only lacked tests, which is where
 the two defects below came from. What the phase covers:
@@ -1049,6 +1050,123 @@ had looked since.
 
 All 204 fixtures are byte-identical with upstream again, file names and checksums
 compared across both trees.
+
+### `1f033a5`…`96a6c56` — the live link grows up, and OCMF learns several keys
+
+Baseline moves to `96a6c56`, upstream v0.13.0. Thirteen commits ignoring the merges:
+five changed behaviour, one replaced the live link fixtures wholesale, one added
+documentation, and the rest are npm work and version bumps.
+
+* **`022c30b` — `timestamp` → `created`, `transports` → `liveTransports`** ✅ **ported.**
+  The names now say what the properties are, and there is deliberately no fallback to
+  the old ones. Here that is `Created` and `LiveTransports`, the JSON names they read
+  and write, and the stamp the detector puts on a link that arrives without one. A
+  document still using the old names remains a live link — both properties are optional
+  — and says nothing this reader looks at, right down to a transport that would have
+  been rejected under the new name. `The_old_property_names_are_read_by_nobody` states
+  that outright, because "accepted" and "read" are easy to confuse in a type guard.
+
+* **`022c30b` — the fixtures replaced by a generated series** ✅ **carried.** The
+  hand-maintained live link is gone; `ChargeTransparencyLiveLink_1.json` is now byte-
+  identical with the last of twenty documents describing one 22 kW AC session, each
+  signed as a whole by an ECDSA and an Ed25519 operator key and chained to its
+  predecessor by hash. 32 new files, so the fixture set moves 204 → 236. The series is
+  the first fixture with a shape this port had never seen, and three tests moved with
+  it: the websocket transport lost its priority-20 fallback endpoint, so
+  `TheFixtureIsOrderedTheWayItReads` now asserts two endpoints rather than three — the
+  priority rule itself stays covered by `TheLowerPriorityIsTriedFirst`, which builds its
+  own transport and does not depend on a fixture keeping that shape.
+
+* **`3a2d3ad` — the parts named as a charge transparency record names them.** The
+  position and the address moved onto the charging station, the meter and the connector
+  below an EVSE below it, `contract.id` became `contract.@id`. Upstream's interface
+  declares none of this and nothing there had to change: a live link *is* its JSON
+  object in TypeScript. Here the reader is typed, and two things followed.
+
+  **`GeoLocation` and `Connector` are read from the charging station** when the top
+  level does not state them, and leniently — a malformed value there is ignored rather
+  than fatal. The top-level properties keep the strict contract, because those are the
+  ones the type guard validates; refusing a usable list of addresses over a bad
+  coordinate inside a station block nobody validates would be stricter than upstream for
+  nothing. Without this the verifier's `located at:` line would have silently gone
+  missing for every document written since `3a2d3ad`, which is the same "answered a
+  weaker question" failure §7a records.
+
+  **The whole document is kept and written back unchanged** (`OriginalJSON`). The new
+  fixtures are signed over themselves with the signatures excluded, so a reader that
+  reassembled a link from its own model would drop the station, the operator, the meter
+  and the meter values — and with them the bytes those signatures cover. This is not
+  tidiness: it is the difference between a stored link that can still be checked and one
+  that cannot. `ALiveLinkSurvivesBeingReadAndWrittenBack` compares the whole document,
+  where before it had to excuse an empty `signatures` array.
+
+* **`87f495f` — the signed meter values are read on demand** ✅ **ported** as
+  `ContentFormatDetector.TryToParseLiveLinkMeterValues()`, which is where upstream's
+  `Chargy.TryToParseLiveLinkMeterValues()` belongs here. It reads the plain textual OCMF
+  form and nothing else, collects the public keys the document names for signing meter
+  values — the operator's, then the meter's — and puts the result through the same
+  `ChargeTransparencyRecordProcessor` every other record goes through. The live link
+  stays a live link: the values are produced when asked for, to be shown next to it.
+
+  The OCMF format is reached through the detector's own format slot rather than
+  constructed on the spot as upstream does, so that an application which removed OCMF
+  gets no meter values instead of getting them anyway — that slot being empty is how an
+  application says which formats it will vouch for. The slot is typed
+  `ITextChargeTransparencyFormat`, which takes one document and one key, so
+  `IMultiDocumentChargeTransparencyFormat` was added beside it for the case a whole
+  session actually needs.
+
+* **`87f495f` — OCMF accepts several public keys** ✅ **ported.**
+  `OCMFSignatureValidator.Validate(document, keys, encoding)` tries each candidate and
+  keeps the first that verifies, clearing the previous attempt's verdict, errors and key
+  first so a failure cannot be left behind for the next one — or for the report, if the
+  last candidate is the one that holds. `OCMFFormat.TryParse` takes the keys as an
+  enumerable; the single-key overload delegates to it and behaves exactly as before.
+
+  This is not a nicety. In the OCMF-Test-01 session the meter signs the start and the
+  end value while the operator signs the seventeen readings in between:
+  `NoSingleKeyVerifiesTheWholeSession` measures that either key alone accounts for 17 or
+  3 of the 20 readings, and both together for all of them, in either order. A reader
+  that took the first key it found would tell an EV driver their sound session was
+  mostly unproven.
+
+* **`20b7f75` — an https transport may say how often to ask again** ✅ **ported.**
+  `Transport.Refresh` is a `TimeSpan`, validated only on https, and on the other two
+  transports `refresh` is an unknown property like any other. The live link client, which
+  upstream has no counterpart to, polls at the period the document states and falls back
+  to the interval it was configured with when the document states none. Upstream's
+  "absence means: do not poll" is a statement about the format; turning it into a client
+  policy would let a document silently override an interval a caller chose explicitly.
+
+* **`b7848b3`, `8eea749`, `60372a5`** — a real RFID UID as the contract identifier, the
+  Berlin PTB time server, the restored httpSSE transport. All three regenerate the
+  series, and all three arrive here as fixture bytes.
+
+* **`660ce7e` — the LiveLink format documentation** ✅ **carried verbatim**, the
+  documentation tree being shared with upstream byte for byte. It is **stale there**:
+  written a week before the renames, it still documents `timestamp` and `transports`,
+  knows nothing of `refresh`, `signedMeterValues` or the station/EVSE containment, and
+  its "Complete Example" is a document v0.13.0 reads as carrying no transports at all.
+  Copied as it stands rather than corrected here, because a fix belongs upstream and a
+  deviation in a shared tree has to be maintained forever — recorded so the discrepancy
+  is not later mistaken for a porting error.
+
+* **`1f033a5`, `5d646c3`, `c6a70b5`, `130a39c`, `96a6c56`** — npm updates, `@vanaheimr/cose`
+  and `@vanaheimr/metrological-cbor` added, releases 0.12.1 and 0.13.0. No counterpart.
+
+* **`CHANGELOG.md`** — upstream's 0.13.0 entry has nothing to land in: this port still
+  has no changelog, which stays the open point §7c already records. Writing one that
+  began here would describe a tenth of the history and imply the rest.
+
+One thing this port did beyond the port, because leaving it undone would have made the
+verifier lie: `chargy-verify` now reports the meter values a live link carries. They are
+in the file, reading them costs no request and tells no operator anything, and the old
+report said "nothing here has been verified" over a document holding twenty valid
+signatures. The exit code follows the readings.
+
+613 tests pass. All 236 fixtures are byte-identical with upstream, compared against the
+repository blobs of `96a6c56` rather than against a working tree, since the checkout is
+what the line-ending question above was about.
 
 ---
 
