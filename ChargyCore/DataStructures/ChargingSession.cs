@@ -34,23 +34,6 @@ namespace cloud.charging.open.chargy
     /// of the same name are resolved afterwards, once the whole charge transparency
     /// record is known.
     /// </summary>
-    /// <param name="Id">The identification of the charging session.</param>
-    /// <param name="Context">An optional JSON-LD context.</param>
-    /// <param name="Begin">An optional start of the charging session.</param>
-    /// <param name="End">An optional end of the charging session.</param>
-    /// <param name="Description">An optional multi-language description.</param>
-    /// <param name="ChargingStationOperatorId">An optional identification of the charging station operator.</param>
-    /// <param name="ChargingPoolId">An optional identification of the charging pool.</param>
-    /// <param name="ChargingStationId">An optional identification of the charging station.</param>
-    /// <param name="EVSEId">An optional identification of the EVSE.</param>
-    /// <param name="ConnectorId">An optional identification of the connector.</param>
-    /// <param name="EnergyMeterId">An optional identification of the energy meter.</param>
-    /// <param name="InternalSessionId">An optional internal identification of the backend that produced this record.</param>
-    /// <param name="Measurements">The measurements of this charging session.</param>
-    /// <param name="PublicKey">An optional public key to verify this charging session with.</param>
-    /// <param name="Original">An optional original representation of this charging session, as it was signed.</param>
-    /// <param name="Signature">An optional signature over the entire charging session.</param>
-    /// <param name="HashValue">An optional hash over the entire charging session.</param>
     public class ChargingSession
     {
 
@@ -231,21 +214,21 @@ namespace cloud.charging.open.chargy
         /// </remarks>
         /// <param name="Id">The identification of the charging session.</param>
         /// <param name="Context">An optional JSON-LD context.</param>
-        /// <param name="Begin">When it began.</param>
-        /// <param name="End">When it ended.</param>
-        /// <param name="Description">An optional description.</param>
-        /// <param name="ChargingStationOperatorId">The operator, when known.</param>
-        /// <param name="ChargingPoolId">The charging pool, when known.</param>
-        /// <param name="ChargingStationId">The charging station, when known.</param>
-        /// <param name="EVSEId">The EVSE, when known.</param>
-        /// <param name="ConnectorId">The connector, when known.</param>
-        /// <param name="EnergyMeterId">The energy meter, when known.</param>
-        /// <param name="InternalSessionId">The number the charging station knows this session by.</param>
-        /// <param name="Measurements">The measurements taken during it.</param>
-        /// <param name="PublicKey">An optional public key.</param>
-        /// <param name="Original">The session as it was written down.</param>
-        /// <param name="Signature">An optional signature over the whole session.</param>
-        /// <param name="HashValue">An optional hash of it.</param>
+        /// <param name="Begin">An optional start of the charging session.</param>
+        /// <param name="End">An optional end of the charging session.</param>
+        /// <param name="Description">An optional multi-language description.</param>
+        /// <param name="ChargingStationOperatorId">An optional identification of the charging station operator.</param>
+        /// <param name="ChargingPoolId">An optional identification of the charging pool.</param>
+        /// <param name="ChargingStationId">An optional identification of the charging station.</param>
+        /// <param name="EVSEId">An optional identification of the EVSE.</param>
+        /// <param name="ConnectorId">An optional identification of the connector.</param>
+        /// <param name="EnergyMeterId">An optional identification of the energy meter.</param>
+        /// <param name="InternalSessionId">An optional internal identification of the backend that produced this record.</param>
+        /// <param name="Measurements">The measurements of this charging session.</param>
+        /// <param name="PublicKey">An optional public key to verify this charging session with.</param>
+        /// <param name="Original">An optional original representation of this charging session, as it was signed.</param>
+        /// <param name="Signature">An optional signature over the entire charging session.</param>
+        /// <param name="HashValue">An optional hash over the entire charging session.</param>
         public ChargingSession(String                     Id,
                                IEnumerable<String>?       Context                    = null,
                                String?                    Begin                      = null,

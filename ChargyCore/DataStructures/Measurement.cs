@@ -29,31 +29,6 @@ namespace cloud.charging.open.chargy
     /// session, e.g. the total imported energy, together with all of its signed
     /// readings.
     /// </summary>
-    /// <param name="EnergyMeterId">The identification of the energy meter.</param>
-    /// <param name="Name">
-    /// The name of the measured quantity, e.g. "ENERGY_TOTAL".
-    ///
-    /// Absent for the meters that report several quantities under one signature —
-    /// a BSM snapshot signs an energy reading, a total and a power at once, and
-    /// naming the group after any one of them would misdescribe the other two.
-    /// Those name themselves per <see cref="Phenomenon"/> instead.
-    /// </param>
-    /// <param name="OBIS">The OBIS number of the measured quantity, e.g. "1-0:1.8.0*255"; absent for the same reason as the name.</param>
-    /// <param name="Scale">The power of ten the measured values are scaled by.</param>
-    /// <param name="Values">The signed readings.</param>
-    /// <param name="Context">An optional JSON-LD context.</param>
-    /// <param name="Unit">An optional unit, e.g. "kWh".</param>
-    /// <param name="CurrentType">
-    /// Whether the energy was measured on alternating or direct current, "AC" or
-    /// "DC". It is not a detail of presentation: the two are measured by different
-    /// hardware, and a meter that says which it was is saying which of its own
-    /// calibrations the reading rests on.
-    /// </param>
-    /// <param name="UnitEncoded">An optional numeric unit code, as used by the SML based formats.</param>
-    /// <param name="ValueType">An optional value type.</param>
-    /// <param name="VerifyChain">Whether the readings form a hash chain that has to be verified as a whole.</param>
-    /// <param name="SignatureInfos">Optional information about how the readings are signed.</param>
-    /// <param name="Phenomena">The individual quantities, for the meters that sign several at once.</param>
     public class Measurement
     {
 
@@ -139,16 +114,28 @@ namespace cloud.charging.open.chargy
         /// Two ways of building the same object that produced different objects.
         /// </remarks>
         /// <param name="EnergyMeterId">The identification of the energy meter.</param>
-        /// <param name="Name">The name of the measured quantity, e.g. "ENERGY_TOTAL".</param>
-        /// <param name="OBIS">The OBIS number of the measured quantity.</param>
+        /// <param name="Name">
+        /// The name of the measured quantity, e.g. "ENERGY_TOTAL".
+        ///
+        /// Absent for the meters that report several quantities under one signature —
+        /// a BSM snapshot signs an energy reading, a total and a power at once, and
+        /// naming the group after any one of them would misdescribe the other two.
+        /// Those name themselves per <see cref="Phenomenon"/> instead.
+        /// </param>
+        /// <param name="OBIS">The OBIS number of the measured quantity, e.g. "1-0:1.8.0*255"; absent for the same reason as the name.</param>
         /// <param name="Scale">The power of ten the measured values are scaled by.</param>
         /// <param name="Values">The signed readings.</param>
         /// <param name="Context">An optional JSON-LD context.</param>
         /// <param name="Unit">An optional unit, e.g. "kWh".</param>
-        /// <param name="UnitEncoded">An optional numeric unit code.</param>
-        /// <param name="CurrentType">Alternating or direct current.</param>
+        /// <param name="UnitEncoded">An optional numeric unit code, as used by the SML based formats.</param>
+        /// <param name="CurrentType">
+        /// Whether the energy was measured on alternating or direct current, "AC" or
+        /// "DC". It is not a detail of presentation: the two are measured by different
+        /// hardware, and a meter that says which it was is saying which of its own
+        /// calibrations the reading rests on.
+        /// </param>
         /// <param name="ValueType">An optional value type.</param>
-        /// <param name="VerifyChain">Whether the readings form a hash chain.</param>
+        /// <param name="VerifyChain">Whether the readings form a hash chain that has to be verified as a whole.</param>
         /// <param name="SignatureInfos">Optional information about how the readings are signed.</param>
         /// <param name="Phenomena">The individual quantities, for the meters that sign several at once.</param>
         public Measurement(String                          EnergyMeterId,
