@@ -51,28 +51,12 @@ namespace cloud.charging.open.chargy
     /// <param name="Original">An optional original representation of this charging session, as it was signed.</param>
     /// <param name="Signature">An optional signature over the entire charging session.</param>
     /// <param name="HashValue">An optional hash over the entire charging session.</param>
-    public class ChargingSession(String                     Id,
-                                 IEnumerable<String>?       Context                    = null,
-                                 String?                    Begin                      = null,
-                                 String?                    End                        = null,
-                                 I18NString?                Description                = null,
-                                 String?                    ChargingStationOperatorId  = null,
-                                 String?                    ChargingPoolId             = null,
-                                 String?                    ChargingStationId          = null,
-                                 String?                    EVSEId                     = null,
-                                 String?                    ConnectorId                = null,
-                                 String?                    EnergyMeterId              = null,
-                                 String?                    InternalSessionId          = null,
-                                 IEnumerable<Measurement>?  Measurements               = null,
-                                 PublicKey?                 PublicKey                  = null,
-                                 String?                    Original                   = null,
-                                 Signature?                 Signature                  = null,
-                                 String?                    HashValue                  = null)
+    public class ChargingSession
     {
 
         #region Data
 
-        private readonly List<Measurement>                measurements                = [.. Measurements ?? []];
+        private readonly List<Measurement>                measurements                = [];
         private readonly List<ChargingTariff>             chargingTariffs             = [];
         private readonly List<ChargingPeriod>             chargingPeriods             = [];
         private readonly List<Parking>                    parking                     = [];
@@ -83,52 +67,52 @@ namespace cloud.charging.open.chargy
         #region Properties
 
         /// <summary>The identification of the charging session.</summary>
-        public String                      Id                            { get; }               = Id;
+        public String                      Id                            { get; }
 
         /// <summary>An optional JSON-LD context.</summary>
-        public IReadOnlyList<String>       JSONLDContext                 { get; }               = Context?.ToArray() ?? [];
+        public IReadOnlyList<String>       JSONLDContext                 { get; }
 
         /// <summary>An optional start of the charging session.</summary>
-        public String?                     Begin                         { get; }               = Begin;
+        public String?                     Begin                         { get; }
 
         /// <summary>An optional end of the charging session.</summary>
-        public String?                     End                           { get; }               = End;
+        public String?                     End                           { get; }
 
         /// <summary>An optional multi-language description.</summary>
-        public I18NString?                 Description                   { get; }               = Description;
+        public I18NString?                 Description                   { get; }
 
         /// <summary>An optional identification of the charging station operator.</summary>
-        public String?                     ChargingStationOperatorId     { get; internal set; } = ChargingStationOperatorId;
+        public String?                     ChargingStationOperatorId     { get; internal set; }
 
         /// <summary>An optional identification of the charging pool.</summary>
-        public String?                     ChargingPoolId                { get; internal set; } = ChargingPoolId;
+        public String?                     ChargingPoolId                { get; internal set; }
 
         /// <summary>An optional identification of the charging station.</summary>
-        public String?                     ChargingStationId             { get; internal set; } = ChargingStationId;
+        public String?                     ChargingStationId             { get; internal set; }
 
         /// <summary>An optional identification of the EVSE.</summary>
-        public String?                     EVSEId                        { get; internal set; } = EVSEId;
+        public String?                     EVSEId                        { get; internal set; }
 
         /// <summary>An optional identification of the connector.</summary>
-        public String?                     ConnectorId                   { get; internal set; } = ConnectorId;
+        public String?                     ConnectorId                   { get; internal set; }
 
         /// <summary>An optional identification of the energy meter.</summary>
-        public String?                     EnergyMeterId                 { get; internal set; } = EnergyMeterId;
+        public String?                     EnergyMeterId                 { get; internal set; }
 
         /// <summary>An optional internal identification of the backend that produced this record.</summary>
-        public String?                     InternalSessionId             { get; }               = InternalSessionId;
+        public String?                     InternalSessionId             { get; }
 
         /// <summary>An optional public key to verify this charging session with.</summary>
-        public PublicKey?                  PublicKey                     { get; internal set; } = PublicKey;
+        public PublicKey?                  PublicKey                     { get; internal set; }
 
         /// <summary>An optional original representation of this charging session, as it was signed.</summary>
-        public String?                     Original                      { get; internal set; } = Original;
+        public String?                     Original                      { get; internal set; }
 
         /// <summary>An optional signature over the entire charging session.</summary>
-        public Signature?                  Signature                     { get; internal set; } = Signature;
+        public Signature?                  Signature                     { get; internal set; }
 
         /// <summary>An optional hash over the entire charging session.</summary>
-        public String?                     HashValue                     { get; internal set; } = HashValue;
+        public String?                     HashValue                     { get; internal set; }
 
         /// <summary>The measurements of this charging session.</summary>
         public IReadOnlyList<Measurement>  Measurements
@@ -220,6 +204,88 @@ namespace cloud.charging.open.chargy
                    ?? (measurements.Count > 0
                            ? measurements[0].EnergyMeterId
                            : null);
+
+        #endregion
+
+        #region Constructor(s)
+
+        /// <summary>
+        /// Create a new charging session.
+        /// </summary>
+        /// <remarks>
+        /// The measurements given here go in through
+        /// <see cref="AddMeasurement"/>, which is what tells each of them which
+        /// session it belongs to.
+        ///
+        /// They used to be copied straight into the list, so a measurement
+        /// built this way did not know its session - and ACrypt reads the
+        /// session for the fields a signature covers. AlfenCrypt01 takes the
+        /// user identification and the internal session number from there; with
+        /// no session it used an empty identification and a zero, rebuilt a
+        /// buffer eight bytes different from the one the meter signed, and
+        /// reported a valid record as an invalid signature. The worst kind of
+        /// wrong answer: it says the charging station is lying.
+        ///
+        /// Invisible from inside, because the record processor sets the same
+        /// link again in a pass of its own.
+        /// </remarks>
+        /// <param name="Id">The identification of the charging session.</param>
+        /// <param name="Context">An optional JSON-LD context.</param>
+        /// <param name="Begin">When it began.</param>
+        /// <param name="End">When it ended.</param>
+        /// <param name="Description">An optional description.</param>
+        /// <param name="ChargingStationOperatorId">The operator, when known.</param>
+        /// <param name="ChargingPoolId">The charging pool, when known.</param>
+        /// <param name="ChargingStationId">The charging station, when known.</param>
+        /// <param name="EVSEId">The EVSE, when known.</param>
+        /// <param name="ConnectorId">The connector, when known.</param>
+        /// <param name="EnergyMeterId">The energy meter, when known.</param>
+        /// <param name="InternalSessionId">The number the charging station knows this session by.</param>
+        /// <param name="Measurements">The measurements taken during it.</param>
+        /// <param name="PublicKey">An optional public key.</param>
+        /// <param name="Original">The session as it was written down.</param>
+        /// <param name="Signature">An optional signature over the whole session.</param>
+        /// <param name="HashValue">An optional hash of it.</param>
+        public ChargingSession(String                     Id,
+                               IEnumerable<String>?       Context                    = null,
+                               String?                    Begin                      = null,
+                               String?                    End                        = null,
+                               I18NString?                Description                = null,
+                               String?                    ChargingStationOperatorId  = null,
+                               String?                    ChargingPoolId             = null,
+                               String?                    ChargingStationId          = null,
+                               String?                    EVSEId                     = null,
+                               String?                    ConnectorId                = null,
+                               String?                    EnergyMeterId              = null,
+                               String?                    InternalSessionId          = null,
+                               IEnumerable<Measurement>?  Measurements               = null,
+                               PublicKey?                 PublicKey                  = null,
+                               String?                    Original                   = null,
+                               Signature?                 Signature                  = null,
+                               String?                    HashValue                  = null)
+        {
+
+            this.Id                         = Id;
+            this.JSONLDContext              = Context?.ToArray() ?? [];
+            this.Begin                      = Begin;
+            this.End                        = End;
+            this.Description                = Description;
+            this.ChargingStationOperatorId  = ChargingStationOperatorId;
+            this.ChargingPoolId             = ChargingPoolId;
+            this.ChargingStationId          = ChargingStationId;
+            this.EVSEId                     = EVSEId;
+            this.ConnectorId                = ConnectorId;
+            this.EnergyMeterId              = EnergyMeterId;
+            this.InternalSessionId          = InternalSessionId;
+            this.PublicKey                  = PublicKey;
+            this.Original                   = Original;
+            this.Signature                  = Signature;
+            this.HashValue                  = HashValue;
+
+            foreach (var measurement in Measurements ?? [])
+                AddMeasurement(measurement);
+
+        }
 
         #endregion
 

@@ -54,64 +54,52 @@ namespace cloud.charging.open.chargy
     /// <param name="VerifyChain">Whether the readings form a hash chain that has to be verified as a whole.</param>
     /// <param name="SignatureInfos">Optional information about how the readings are signed.</param>
     /// <param name="Phenomena">The individual quantities, for the meters that sign several at once.</param>
-    public class Measurement(String                          EnergyMeterId,
-                             String?                         Name,
-                             String?                         OBIS,
-                             Int32                           Scale,
-                             IEnumerable<MeasurementValue>?  Values          = null,
-                             IEnumerable<String>?            Context         = null,
-                             String?                         Unit            = null,
-                             UInt16?                         UnitEncoded     = null,
-                             String?                         CurrentType     = null,
-                             String?                         ValueType       = null,
-                             Boolean?                        VerifyChain     = null,
-                             SignatureInfos?                 SignatureInfos  = null,
-                             IEnumerable<Phenomenon>?        Phenomena       = null)
+    public class Measurement
     {
 
         #region Data
 
-        private readonly List<MeasurementValue> values = [.. Values ?? []];
+        private readonly List<MeasurementValue> values = [];
 
         #endregion
 
         #region Properties
 
         /// <summary>The identification of the energy meter.</summary>
-        public String                           EnergyMeterId         { get; }      = EnergyMeterId;
+        public String                           EnergyMeterId         { get; }
 
         /// <summary>The name of the measured quantity, e.g. "ENERGY_TOTAL".</summary>
-        public String?                          Name                  { get; }      = Name;
+        public String?                          Name                  { get; }
 
         /// <summary>The OBIS number of the measured quantity, e.g. "1-0:1.8.0*255".</summary>
-        public String?                          OBIS                  { get; }      = OBIS;
+        public String?                          OBIS                  { get; }
 
         /// <summary>The individual quantities, for the meters that sign several at once.</summary>
-        public IReadOnlyList<Phenomenon>        Phenomena             { get; }      = Phenomena?.ToArray() ?? [];
+        public IReadOnlyList<Phenomenon>        Phenomena             { get; }
 
         /// <summary>The power of ten the measured values are scaled by.</summary>
-        public Int32                            Scale                 { get; }      = Scale;
+        public Int32                            Scale                 { get; }
 
         /// <summary>An optional JSON-LD context.</summary>
-        public IReadOnlyList<String>            Context               { get; }      = Context?.ToArray() ?? [];
+        public IReadOnlyList<String>            Context               { get; }
 
         /// <summary>An optional unit, e.g. "kWh".</summary>
-        public String?                          Unit                  { get; }      = Unit;
+        public String?                          Unit                  { get; }
 
         /// <summary>An optional numeric unit code, as used by the SML based formats.</summary>
-        public UInt16?                          UnitEncoded           { get; }      = UnitEncoded;
+        public UInt16?                          UnitEncoded           { get; }
 
         /// <summary>Whether the energy was measured on alternating or direct current.</summary>
-        public String?                          CurrentType           { get; }      = CurrentType;
+        public String?                          CurrentType           { get; }
 
         /// <summary>An optional value type.</summary>
-        public String?                          ValueType             { get; }      = ValueType;
+        public String?                          ValueType             { get; }
 
         /// <summary>Whether the readings form a hash chain that has to be verified as a whole.</summary>
-        public Boolean?                         VerifyChain           { get; }      = VerifyChain;
+        public Boolean?                         VerifyChain           { get; }
 
         /// <summary>Optional information about how the readings are signed.</summary>
-        public SignatureInfos?                  SignatureInfos        { get; }      = SignatureInfos;
+        public SignatureInfos?                  SignatureInfos        { get; }
 
         /// <summary>The signed readings.</summary>
         public IReadOnlyList<MeasurementValue>  Values
@@ -128,6 +116,75 @@ namespace cloud.charging.open.chargy
 
         #endregion
 
+
+        #region Constructor(s)
+
+        /// <summary>
+        /// Create a new measurement.
+        /// </summary>
+        /// <remarks>
+        /// The readings given here go in through <see cref="AddValue"/> rather
+        /// than straight into the list, which is the whole point of this
+        /// constructor existing at all.
+        ///
+        /// They used to be copied in, and a reading copied in did not know
+        /// which measurement it belonged to. Every format that builds its
+        /// measurements this way - and most of them do - therefore produced
+        /// readings that ACrypt could not verify: AlfenCrypt01 answers "Not an
+        /// Alfen measurement!" for one of them, whoever wrote the record. It
+        /// was invisible because the record processor sets the same links again
+        /// in a pass of its own, so anything going through the whole pipeline
+        /// worked and anything calling a format directly did not.
+        ///
+        /// Two ways of building the same object that produced different objects.
+        /// </remarks>
+        /// <param name="EnergyMeterId">The identification of the energy meter.</param>
+        /// <param name="Name">The name of the measured quantity, e.g. "ENERGY_TOTAL".</param>
+        /// <param name="OBIS">The OBIS number of the measured quantity.</param>
+        /// <param name="Scale">The power of ten the measured values are scaled by.</param>
+        /// <param name="Values">The signed readings.</param>
+        /// <param name="Context">An optional JSON-LD context.</param>
+        /// <param name="Unit">An optional unit, e.g. "kWh".</param>
+        /// <param name="UnitEncoded">An optional numeric unit code.</param>
+        /// <param name="CurrentType">Alternating or direct current.</param>
+        /// <param name="ValueType">An optional value type.</param>
+        /// <param name="VerifyChain">Whether the readings form a hash chain.</param>
+        /// <param name="SignatureInfos">Optional information about how the readings are signed.</param>
+        /// <param name="Phenomena">The individual quantities, for the meters that sign several at once.</param>
+        public Measurement(String                          EnergyMeterId,
+                           String?                         Name,
+                           String?                         OBIS,
+                           Int32                           Scale,
+                           IEnumerable<MeasurementValue>?  Values          = null,
+                           IEnumerable<String>?            Context         = null,
+                           String?                         Unit            = null,
+                           UInt16?                         UnitEncoded     = null,
+                           String?                         CurrentType     = null,
+                           String?                         ValueType       = null,
+                           Boolean?                        VerifyChain     = null,
+                           SignatureInfos?                 SignatureInfos  = null,
+                           IEnumerable<Phenomenon>?        Phenomena       = null)
+        {
+
+            this.EnergyMeterId   = EnergyMeterId;
+            this.Name            = Name;
+            this.OBIS            = OBIS;
+            this.Phenomena       = Phenomena?.ToArray() ?? [];
+            this.Scale           = Scale;
+            this.Context         = Context?.ToArray() ?? [];
+            this.Unit            = Unit;
+            this.UnitEncoded     = UnitEncoded;
+            this.CurrentType     = CurrentType;
+            this.ValueType       = ValueType;
+            this.VerifyChain     = VerifyChain;
+            this.SignatureInfos  = SignatureInfos;
+
+            foreach (var value in Values ?? [])
+                AddValue(value);
+
+        }
+
+        #endregion
 
         #region AddValue(Value)
 
