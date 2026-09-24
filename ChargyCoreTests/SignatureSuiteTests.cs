@@ -322,16 +322,74 @@ namespace cloud.charging.open.chargy.tests
         {
 
             // The known compact lengths are checked first for exactly this reason.
-            var compactP256 = new Byte[64];
-            compactP256[0]  = 0x30;
+            var compactP256      = new Byte[64];
+            compactP256[0]       = 0x30;
 
-            var derLike     = new Byte[70];
-            derLike[0]      = 0x30;
+            // secp192r1 and secp192k1, missing from the list once - and one of
+            // their signatures in 256 was read as DER for it.
+            var compactSecp192   = new Byte[48];
+            compactSecp192[0]    = 0x30;
+
+            var derLike          = new Byte[70];
+            derLike[0]           = 0x30;
+
+            // A length the list does not know: what a suite that knows it says.
+            var compactOfASuite  = new Byte[58];
+            compactOfASuite[0]   = 0x30;
 
             Assert.Multiple(() => {
-                Assert.That(SignatureSuites.DetectECDSAEncoding(compactP256),  Is.EqualTo(SignatureEncoding.Compact));
-                Assert.That(SignatureSuites.DetectECDSAEncoding(derLike),      Is.EqualTo(SignatureEncoding.DER));
-                Assert.That(SignatureSuites.DetectECDSAEncoding(new Byte[64]), Is.EqualTo(SignatureEncoding.Compact));
+                Assert.That(SignatureSuites.DetectECDSAEncoding(compactP256),                         Is.EqualTo(SignatureEncoding.Compact));
+                Assert.That(SignatureSuites.DetectECDSAEncoding(compactSecp192),                      Is.EqualTo(SignatureEncoding.Compact));
+                Assert.That(SignatureSuites.DetectECDSAEncoding(derLike),                             Is.EqualTo(SignatureEncoding.DER));
+                Assert.That(SignatureSuites.DetectECDSAEncoding(new Byte[64]),                        Is.EqualTo(SignatureEncoding.Compact));
+                Assert.That(SignatureSuites.DetectECDSAEncoding(compactOfASuite),                     Is.EqualTo(SignatureEncoding.DER));
+                Assert.That(SignatureSuites.DetectECDSAEncoding(compactOfASuite, CompactLength: 58),  Is.EqualTo(SignatureEncoding.Compact));
+            });
+
+        }
+
+        #endregion
+
+        #region A_secp192r1_signature_whose_r_begins_with_0x30_verifies()
+
+        /// <summary>
+        /// A secp192r1 signature made by OpenSSL, not by this library, whose r
+        /// begins with 0x30 - as one signature in 256 on this curve does.
+        ///
+        /// Its compact form, r and s side by side, then begins with the byte that
+        /// begins every DER SEQUENCE, and 48 was not among the lengths known to be
+        /// compact: it was read as DER, did not parse, and a genuine signature was
+        /// reported invalid. Alfen records are signed on this curve and verified
+        /// exactly that way, as r and s. OpenSSL said "Verified OK" to it before
+        /// it was written down here.
+        /// </summary>
+        [Test]
+        public void A_secp192r1_signature_whose_r_begins_with_0x30_verifies()
+        {
+
+            var suite      = new ECDSASignatureSuite("ECDSA-secp192r1", "secp192r1", "SHA-256");
+            var publicKey  = Convert.FromHexString("04d4abb069569a2564674102f71a697780a9648d9fca87797ee0627a91567f3573e0d0f736b98eb308d5281d52af45089e");
+            var message    = System.Text.Encoding.UTF8.GetBytes("ChargyCore secp192r1, r beginning with 0x30");
+            var r          = "308337986832093F681CFE214979FD4B146C515A0C0C3569";
+            var s          = "B426EFA8E917D324ABFAAA1680B25BB871545EA0D6320939";
+            var compact    = Convert.FromHexString(r + s);
+            var der        = Convert.FromHexString("30350218308337986832093f681cfe214979fd4b146c515a0c0c3569021900b426efa8e917d324abfaaa1680b25bb871545ea0d6320939");
+            var key        = ECCurveVerifier.secp192r1.ParsePublicKey(Convert.ToHexStringLower(publicKey));
+
+            Assert.That(key, Is.Not.Null, "the public key lies on secp192r1");
+
+            Assert.Multiple(() => {
+
+                Assert.That(compact[0],                                                              Is.EqualTo(0x30), "the case this is about");
+
+                // Nobody says which layout it is: the suite knows its own length.
+                Assert.That(suite.Verify(message, compact, publicKey),                               Is.True, "compact, detected");
+                Assert.That(suite.Verify(message, der,     publicKey),                               Is.True, "DER, detected");
+
+                // As the Alfen format and the other meter formats verify: r and s,
+                // over a hash they computed themselves.
+                Assert.That(key!.Verify(System.Security.Cryptography.SHA256.HashData(message), r, s), Is.True, "r and s");
+
             });
 
         }

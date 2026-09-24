@@ -60,6 +60,23 @@ namespace cloud.charging.open.chargy.Crypto
         public Boolean Verify(ReadOnlySpan<Byte> Hash,
                               ReadOnlySpan<Byte> Signature)
 
+            => Verify(Hash, Signature, Encoding: null);
+
+        #endregion
+
+        #region (private) Verify(Hash, Signature, Encoding)
+
+        /// <summary>
+        /// Verify a signature over an already computed hash, in the given layout
+        /// or, without one, in the layout its bytes suggest.
+        /// </summary>
+        /// <param name="Hash">The hash of the signed buffer.</param>
+        /// <param name="Signature">The signature.</param>
+        /// <param name="Encoding">Its layout, when the caller knows it.</param>
+        private Boolean Verify(ReadOnlySpan<Byte>  Hash,
+                               ReadOnlySpan<Byte>  Signature,
+                               SignatureEncoding?  Encoding)
+
             => Curve.Suite.Verify(
                    Hash,
                    Signature,
@@ -67,7 +84,8 @@ namespace cloud.charging.open.chargy.Crypto
                    new SignatureOptions(
                        Prehashed: true,
                        // Energy meters in the field produced both halves of s.
-                       LowS:      false
+                       LowS:      false,
+                       Encoding:  Encoding
                    )
                );
 
@@ -91,8 +109,11 @@ namespace cloud.charging.open.chargy.Crypto
 
             var signature = Curve.TryEncodeCompactSignature(R, S);
 
+            // Put together right here in the compact layout, so that is said
+            // rather than guessed from the bytes: a compact signature whose r
+            // begins with 0x30 looks like the start of a DER SEQUENCE.
             return signature is not null &&
-                   Verify(Hash, signature);
+                   Verify(Hash, signature, SignatureEncoding.Compact);
 
         }
 

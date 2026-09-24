@@ -15,6 +15,14 @@
  * limitations under the License.
  */
 
+#region Usings
+
+using org.GraphDefined.Vanaheimr.Illias;
+
+using cloud.charging.open.chargy.Formats.Alfen;
+
+#endregion
+
 namespace cloud.charging.open.chargy.tests.Formats
 {
 
@@ -114,6 +122,55 @@ namespace cloud.charging.open.chargy.tests.Formats
                    "ALFEN/ALFEN-Testdata-05_1_9MWh_8Intermediates_SAFEXMLContainer.xml",
                    "ALFEN/ALFEN-Testdata-05_1_9MWh_8Intermediates_SAFEXMLContainer.expected.txt"
                );
+
+        #endregion
+
+
+        #region ASignatureBeginningWith0x30_Verifies()
+
+        /// <summary>
+        /// A reading whose signature begins with 0x30, as one Alfen signature in
+        /// 256 does.
+        ///
+        /// The signature is r and s side by side, 48 bytes on secp192r1, and an r
+        /// beginning with the byte that begins every DER SEQUENCE made it look
+        /// like one. It was read as DER, and a genuine reading was reported as
+        /// signed invalidly.
+        ///
+        /// Written by the Modbus/TLS energy meter simulator, whose tests found
+        /// this (OpenChargingCloud/ModbusTLSEnergyMeter): its Alfen writer signs
+        /// on secp192r1 with a key of its own, and this record is one whose
+        /// signature happens to begin with 0x30.
+        /// </summary>
+        [Test]
+        public void ASignatureBeginningWith0x30_Verifies()
+        {
+
+            const String record = "AP;0;3;AKNLSR2RNJASZAVKXX4RWLWGM4PB5SCEI75NWLVA;" +
+                                  "BIFQYDIOB4IBCEQTOYYS4MFLZUAQEAYEAUDAOCAJBIAAAAAA5ABQAAGACC2WUAIAAEEAAAA6ABAOEAIAAAAAAACUIVJVIVCBI4YDCAAAAAAAAAAAAAAAAAAHAAAAAAIAAAAA====;" +
+                                  "GCNYRNJLOZGYGS5WSHKR5RVPECFUQ4LFKRHZQPTO6YPBPQGDXMVELH5ZK3JRXV6GNKADORTPZTN2E===;";
+
+            var i18n    = I18NDictionary.Default();
+            var parsed  = new AlfenFormat(i18n).TryParseText(record);
+
+            Assert.That(parsed, Is.InstanceOf<ChargeTransparencyRecord>());
+
+            var transparencyRecord  = (ChargeTransparencyRecord) parsed;
+            var value               = transparencyRecord.ChargingSessions.First().Measurements.First().Values.First();
+            var energyMeter         = transparencyRecord.ChargingStations.First().EVSEs.First().EnergyMeters.First();
+
+            var verdict             = new AlfenCrypt01(i18n, _ => energyMeter).VerifyMeasurement(value);
+
+            Assert.Multiple(() => {
+
+                Assert.That(record.Split(';')[5].FromBASE32()[0],  Is.EqualTo(0x30),  "the case this is about");
+
+                Assert.That(verdict.Status,                        Is.EqualTo(VerificationResult.ValidSignature),
+                            String.Join("; ", verdict.Errors.Select(problem => problem.ToString())));
+
+            });
+
+        }
 
         #endregion
 

@@ -268,7 +268,7 @@ namespace cloud.charging.open.chargy.Crypto
             try
             {
 
-                var encoding = Options?.Encoding ?? SignatureSuites.DetectECDSAEncoding(Signature);
+                var encoding = Options?.Encoding ?? SignatureSuites.DetectECDSAEncoding(Signature, 2 * ScalarLength);
 
                 if (encoding == SignatureEncoding.Raw)
                     return false;

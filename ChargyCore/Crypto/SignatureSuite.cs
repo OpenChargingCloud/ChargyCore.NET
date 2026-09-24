@@ -272,7 +272,7 @@ namespace cloud.charging.open.chargy.Crypto
         #endregion
 
 
-        #region (internal) DetectECDSAEncoding(Signature)
+        #region (internal) DetectECDSAEncoding(Signature, CompactLength = null)
 
         /// <summary>
         /// Whether the given ECDSA signature is DER encoded or a compact r/s pair.
@@ -280,13 +280,22 @@ namespace cloud.charging.open.chargy.Crypto
         /// Note: The known compact lengths are checked first, because a compact
         /// signature whose r happens to start with 0x30 would otherwise be
         /// mistaken for a DER SEQUENCE. This is "detectECDSAEncoding()" of
-        /// ChargyCore.TS.
+        /// ChargyCore.TS, which only ever sees the four curves of its registry.
+        /// This port verifies secp192r1 and secp192k1 as well, and without 48
+        /// in the list one signature in 256 on them - the ones whose r begins
+        /// with 0x30 - was read as DER and found invalid, genuine Alfen records
+        /// among them. A suite knows its own compact length and says it, so
+        /// that no curve depends on this list being complete.
         /// </summary>
         /// <param name="Signature">A signature.</param>
-        internal static SignatureEncoding DetectECDSAEncoding(ReadOnlySpan<Byte> Signature)
+        /// <param name="CompactLength">The compact length of the curve it was made on, when the caller knows it.</param>
+        internal static SignatureEncoding DetectECDSAEncoding(ReadOnlySpan<Byte>  Signature,
+                                                              Int32?              CompactLength   = null)
         {
 
-            var isKnownCompactLength = Signature.Length ==  64 ||   // P-256, secp256k1
+            var isKnownCompactLength = Signature.Length == CompactLength ||
+                                       Signature.Length ==  48 ||   // secp192r1, secp192k1
+                                       Signature.Length ==  64 ||   // P-256, secp256k1
                                        Signature.Length ==  96 ||   // P-384
                                        Signature.Length == 132;     // P-521
 
