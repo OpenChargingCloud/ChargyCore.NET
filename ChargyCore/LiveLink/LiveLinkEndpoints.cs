@@ -147,33 +147,120 @@ namespace cloud.charging.open.chargy.LiveLink
         #endregion
 
 
+        #region LiteralHeaders(Transport)
+
+        /// <summary>
+        /// The header names this client never takes from a document: what the
+        /// HTTP and WebSocket machinery writes itself, and the one-time password,
+        /// which is computed per request.
+        /// </summary>
+        private static readonly HashSet<String> reservedHeaders = new (StringComparer.OrdinalIgnoreCase) {
+            "Host", "Content-Length", "Transfer-Encoding", "Connection", "Upgrade", "Keep-Alive", "TE", "Trailer",
+            "Sec-WebSocket-Key", "Sec-WebSocket-Version", "Sec-WebSocket-Accept", "Sec-WebSocket-Extensions", "Sec-WebSocket-Protocol",
+            "TOTP"
+        };
+
+        /// <summary>
+        /// The custom headers of a transport this client sends: those the document
+        /// states as a literal value.
+        ///
+        /// A value a provider computes per request is not sent: the format defines
+        /// the shape of a provider, not what any provider means, and a client that
+        /// does not know one sends no header for it rather than the description of
+        /// one. A header that is not a valid HTTP field — a name that is not a
+        /// token, a value with a line break in it — or that the request machinery
+        /// owns is not sent either: a document says what it wants sent, it does
+        /// not get to write the request.
+        /// </summary>
+        /// <param name="Transport">A transport of a charge transparency live link.</param>
+        public static IEnumerable<KeyValuePair<String, String>> LiteralHeaders(Transport Transport)
+        {
+
+            foreach (var (name, value) in Transport.CustomHeaders)
+                if (value.Literal is String literal                           &&
+                    name.Length > 0                                           &&
+                    name.All(character => character < 128 && (Char.IsAsciiLetterOrDigit(character) || "!#$%&'*+-.^_`|~".Contains(character))) &&
+                   !literal.Any(character => character is '\r' or '\n' or '\0') &&
+                   !reservedHeaders.Contains(name))
+                {
+                    yield return new KeyValuePair<String, String>(name, literal);
+                }
+
+        }
+
+        #endregion
+
         #region ToHermodTOTPConfig(TOTP)
 
         /// <summary>
         /// What a live link says about its one-time password, in the shape Hermod
-        /// takes it in.
+        /// takes it in, or null when there is none — or none this library can
+        /// compute.
         ///
         /// Handing this to an HTTP or WebSocket client is all that is needed: the
         /// client generates the current password for every request and sends it
-        /// in the "TOTP" header. The live link states only the secret and the
-        /// time step, so the length and the alphabet stay at what both sides
-        /// default to.
+        /// in the "TOTP" header. What the live link leaves out stays at what both
+        /// sides default to. The period is its "validityTime" where it states one
+        /// and its "timeStep" otherwise, which is the name the format used first.
         ///
-        /// The field is called "initialSharedSecret", which suggests a secret
-        /// that is meant to change over time. Nothing in the live link format
-        /// says what it would change into or when, so it is used as the shared
-        /// secret — and named here, rather than silently, because the day that
-        /// evolution is specified this is the line that has to change.
+        /// A hash algorithm Hermod does not know makes the configuration one
+        /// nobody here can compute, rather than one computed with the default
+        /// algorithm: a password made with the wrong hash is refused by the
+        /// station all the same, only later and with less of a reason.
         /// </summary>
         /// <param name="TOTP">The one-time password configuration of a transport.</param>
         public static HermodTOTPConfig? ToHermodTOTPConfig(TOTPConfig? TOTP)
+        {
 
-            => TOTP is null
-                   ? null
-                   : new HermodTOTPConfig(
-                         TOTP.InitialSharedSecret,
-                         TimeSpan.FromSeconds(TOTP.TimeStep)
-                     );
+            if (TOTP is null)
+                return null;
+
+            TOTPHashAlgorithm? hashAlgorithm = null;
+
+            if (TOTP.HashAlgorithm is String hashAlgorithmName)
+            {
+
+                if (!TOTPHashAlgorithmExtensions.TryParse(hashAlgorithmName, out var parsedHashAlgorithm))
+                    return null;
+
+                hashAlgorithm = parsedHashAlgorithm;
+
+            }
+
+            return new HermodTOTPConfig(
+                       TOTP.SharedSecret,
+                       (TOTP.ValidityTime ?? TOTP.TimeStep) is Double seconds
+                           ? TimeSpan.FromSeconds(seconds)
+                           : null,
+                       TOTP.TOTPLength is Int32 length && length > 0
+                           ? (UInt32) length
+                           : null,
+                       TOTP.Alphabet,
+                       HashAlgorithm: hashAlgorithm
+                   );
+
+        }
+
+        #endregion
+
+        #region (private, static) Generate(Config, Timestamp)
+
+        /// <summary>
+        /// The passwords of a configuration for the given moment.
+        /// </summary>
+        private static (String Previous, String Current, String Next, TimeSpan RemainingTime, DateTimeOffset EndTime)
+
+            Generate(HermodTOTPConfig  Config,
+                     DateTimeOffset?   Timestamp)
+
+            => HermodTOTPGenerator.GenerateTOTPs(
+                   Config.SharedSecret,
+                   Config.ValidityTime,
+                   Config.Length ?? 12,
+                   Config.Alphabet,
+                   TOTPTimestamp: Timestamp,
+                   HashAlgorithm: Config.HashAlgorithm
+               );
 
         #endregion
 
@@ -181,7 +268,8 @@ namespace cloud.charging.open.chargy.LiveLink
 
         /// <summary>
         /// The value of the "TOTP" request header for this moment, or null when
-        /// the transport is not protected by a one-time password.
+        /// the transport is not protected by a one-time password this library can
+        /// compute.
         ///
         /// Hermod's own clients build this themselves from a
         /// <see cref="HermodTOTPConfig"/>; this exists for the transports that do
@@ -196,18 +284,12 @@ namespace cloud.charging.open.chargy.LiveLink
                                                 DateTimeOffset?  Timestamp = null)
         {
 
-            if (TOTP is null)
+            if (ToHermodTOTPConfig(TOTP) is not HermodTOTPConfig config)
                 return null;
-
-            var totps = HermodTOTPGenerator.GenerateTOTPs(
-                            TOTP.InitialSharedSecret,
-                            TimeSpan.FromSeconds(TOTP.TimeStep),
-                            TOTPTimestamp: Timestamp
-                        );
 
             return new TOTPHTTPHeader(
                        TOTPHTTPHeaderType.RAW,
-                       totps.Current
+                       Generate(config, Timestamp).Current
                    ).ToString();
 
         }
@@ -241,11 +323,10 @@ namespace cloud.charging.open.chargy.LiveLink
                 return URL;
             }
 
-            var totps = HermodTOTPGenerator.GenerateTOTPs(
-                            TOTP.InitialSharedSecret,
-                            TimeSpan.FromSeconds(TOTP.TimeStep),
-                            TOTPTimestamp: Timestamp
-                        );
+            if (ToHermodTOTPConfig(TOTP) is not HermodTOTPConfig config)
+                return URL;
+
+            var totps = Generate(config, Timestamp);
 
             return URL.Replace(TOTPPlaceholder, Uri.EscapeDataString(totps.Current), StringComparison.Ordinal);
 

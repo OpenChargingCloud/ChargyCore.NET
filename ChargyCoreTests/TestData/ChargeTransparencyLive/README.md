@@ -5,8 +5,8 @@ Fixtures for the charge transparency live link format
 
 | Fixture                            | |
 | ---------------------------------- | - |
-| `ChargeTransparencyLiveLink_1.json`| a full live link: the **final document** of the `OCMF-Test-01` series, byte-identical to `OCMF-Test-01__0019.json`. Generated, not hand-maintained. |
-| `ChargeTransparencyLiveLink_2.json`| the minimal form: context and live transports only |
+| `ChargeTransparencyLiveLink_1.json`| a full live link: the **final document** of the `OCMF-Test-01` series, byte-identical to `OCMF-Test-01__0034.json`. Generated, not hand-maintained. |
+| `ChargeTransparencyLiveLink_2.json`| the minimal form: context, creation timestamp and live transports only |
 | `OCMF-Test-01/`                    | the generated 22 kW charging session it comes from, see its own README |
 
 This file collects the conventions that apply to **all** of them. Everything
@@ -21,11 +21,14 @@ but they describe them with the same words:
 | Property | |
 | -------- | - |
 | `chargingStationOperator`             | who runs the station, with its `publicKeys` |
+| `gridOperator`                        | who runs the grid the station draws from, with its `publicKeys` |
 | `chargingStation`                     | `@id`, `geoLocation`, `address`, and the devices below it |
 | `chargingStation.EVSE`                | `@id`, `powerType`, `maxPower` |
 | `chargingStation.EVSE.energyMeter`    | `@id`, `manufacturer`, `model`, `hardware`, `firmware`, `signatureFormat`, `publicKeys` |
 | `chargingStation.EVSE.connector`      | `standard`, `format`, `powerType`, `maxPower`, `cable` |
 | `contract`                            | `@id` and `type` of the identification that started the session |
+| `chargingPeriods`                     | the tariff element in force and the costs, per period of the session |
+| `legallyRelevantLogMessages`          | what happened that a verifier has to know of, e.g. a grid power constraint |
 
 An identifier is `@id` here as it is there, and the containment follows the
 hardware: the meter and the connector below the EVSE, the EVSE below the
@@ -33,12 +36,12 @@ station, the position on the station rather than in a location of its own.
 
 The cardinality is the one difference that remains. A live link describes
 exactly one of each, so these are single objects where a record carries lists
-(`chargingStationOperators`, `chargingStations`). The two stay separate
-document types, and merging them would be wrong: a live link is one session
-that has not finished, a record a collection of sessions that have. What the
-shared names buy is that nothing has to be renamed when one is read next to the
-other, and that an application can show a running session with the code it
-already has for a finished one.
+(`chargingStationOperators`, `gridOperators`, `chargingStations`). The two
+stay separate document types, and merging them would be wrong: a live link is
+one session that has not finished, a record a collection of sessions that
+have. What the shared names buy is that nothing has to be renamed when one is
+read next to the other, and that an application can show a running session
+with the code it already has for a finished one.
 
 ## Describing the encodings
 
@@ -168,6 +171,26 @@ Three properties fall out of writing it this way:
   inside its own bytes; a `raw` key carries nothing, so there the algorithm has
   to be stated next to it.
 
+#### COSE keys name only registered curves
+
+A `COSE_Key` names its curve with `crv`, an integer from the IANA "COSE Elliptic
+Curves" registry, and in no other way. The registry has P-256, P-384, P-521,
+X25519, X448, Ed25519, Ed448, secp256k1 (RFC 8812) and brainpoolP256r1 to
+brainpoolP512r1 — but **no secp192r1, secp192k1 or secp224k1**, which are the
+curves of the EMH, GDF, Alfen and legacy ChargePoint meters and of the OCMF
+secp192 algorithms.
+
+**Therefore: `["COSE_Key", "CBOR", …]` is only for keys on a registered curve.**
+A key on secp192r1, secp192k1 or secp224k1 is written as
+`["SubjectPublicKeyInfo", "DER", …]`, where the curve is an object identifier
+and every curve has one, or as `["ECPoint", …]` next to an `algorithm` that
+names the curve. A private-use `crv` (below −65536) is no way around this: only
+its author knows what it means, so a consumer rejects it — saying that the curve
+cannot be expressed as a COSE key, not that the key is broken.
+
+Key ids are not affected: `keyIdGeneration` hashes the `SubjectPublicKeyInfo`
+whatever form a key is stored in, so an id is defined for every curve.
+
 For comparison, ChargyCore currently describes public keys with two independent
 fields, `format` (`PublicKeyFormats.DER` | `PublicKeyFormats.XY`) and
 `encoding` (`hex` | `base32` | `base64`). `DER` there means the SPKI case, and
@@ -178,7 +201,8 @@ serialization layer.
 ## Public keys
 
 Public keys are listed where they belong: the operator ones under
-`chargingStationOperator.publicKeys`, the meter one under
+`chargingStationOperator.publicKeys`, the grid operator ones under
+`gridOperator.publicKeys`, the meter one under
 `chargingStation.EVSE.energyMeter.publicKeys`. Each entry states its
 `keyUsage`, its `algorithm`, its `encodings` and its `value`.
 
@@ -286,6 +310,13 @@ That is what makes the signature independent of the layout of the JSON file, so
 these fixtures can stay readable and hand-formatted. ChargyCore's
 `canonicalJSONStringify()` produces exactly these bytes.
 
+Since ChargyCore 0.14.0 this check is built in: reading a live link through
+`DetectAndConvertContentFormat()` verifies every signature the document
+carries — resolving each key by its id, wrapping a raw-stored key into its
+`SubjectPublicKeyInfo` form for that — and attaches the outcome to the document
+as `signatureVerification` plus non-fatal `warnings`. An unsigned or badly
+signed document is reported, never refused.
+
 ### Why the key id, and why nothing else
 
 - A structural path such as *"the operator key with key usage `signCTRs`"* is
@@ -326,14 +357,48 @@ plain list of documents:
 Format and encoding do not change from one meter value to the next, which is
 the same hoisting criterion as for `keyIdGeneration`.
 
+### What ChargyCore reads
+
+Recognizing a live link does not touch this section: `signedMeterValues` is not
+part of `IChargeTransparencyLiveLink` and `IsAChargeTransparencyLiveLink()`
+never looks at it. It is read on request, by
+`Chargy.TryToParseLiveLinkMeterValues()`, which returns the values as an
+ordinary charge transparency record — verified with the public keys of the
+very same document, and leaving the live link a live link.
+
+The candidate keys are collected from `chargingStationOperator.publicKeys` and
+`chargingStation.EVSE.energyMeter.publicKeys`, keeping the entries whose
+`keyUsage`, if stated at all, contains `signMeterValues` or
+`signEnergyMeterValues`. That is why the meter key and the operator's
+`signEnergyMeterValues` key both have to be listed: between them they cover the
+start, the intermediate and the end values, and a session signed by two keys
+cannot be verified from one of them.
+
+Only `encodings[0] == "OCMF"` is read. A value carried as `base64`, or in
+another meter value format, is left alone rather than guessed at, and that is
+not reported: such a live link is a valid live link with working transports and
+no meter values to show.
+
+The keys have the freedom
+[hex is a convention here, not a rule](#hex-is-a-convention-here-not-a-rule)
+describes. A key is read in `hex`, `base64`, `base64url` or `PEM`, and as a
+`SubjectPublicKeyInfo`, a `raw` key, a `COSE_Key` on a registered curve, or an
+`ECPoint` next to an `algorithm` that names its curve. A key that still cannot
+be read is not skipped: a reading that no readable key verified is reported
+with that key's status — `UnknownPublicKeyFormat`, or `InvalidPublicKey` for a
+value that does not decode — and the reason, rather than as a signature that
+does not match, and the record carries one error per such key. Leaving the key
+out would turn "could not be checked" into "does not match" for every reading
+it signed.
+
 ## Live transports
 
 A live link describes a charging session that is still running, so it says
 where the next version of itself can be had. `liveTransports` lists the ways,
-each with a `type` of `https`, `websocket` or `httpSSE`, and either a single
-`url` or a list of `urls` with a `priority` and a `weight` per entry. A
-`totp` gives the shared secret and the time step for the one-time password
-those endpoints expect.
+each with a `type` of `https`, `websocket` or `httpSSE` and a list of `urls`.
+An entry of that list is either the URL itself or an object carrying it
+alongside a `priority` and a `weight`. A `totp` gives the shared secret and the
+time step for the one-time password those endpoints expect.
 
 An `https` transport has to be asked, where the other two deliver on their own,
 so it may state how often to ask:
@@ -341,12 +406,123 @@ so it may state how often to ask:
 ```json
 {
     "type":    "https",
-    "url":     "https://api1.example.com/chargingSessions/OCMF-Test-01/transparency/live?token=abcdef",
+    "urls":    [ "https://api1.example.com/chargingSessions/OCMF-Test-01/transparency/live?token=abcdef" ],
     "refresh":  10
 }
 ```
 
-`refresh` is a number of **seconds**. Its absence means: do not poll.
+`refresh` is a number of **seconds**. **Its absence means 10 seconds**, not
+"do not poll": an `https` transport exists to be asked, and a document that
+names one without saying how often still wants its readers to see what the
+session does next. A value that is not a positive number is treated as absent.
+
+A client clamps what it is told rather than obeying it — the Chargy WebApp
+polls no faster than every 5 seconds and no slower than once a day, whatever
+the document says.
+
+**Every** transport may state the HTTP headers that belong on every request to
+it — an API key its endpoint expects, a tenant selector. An `https` poll, the
+opening request of an `httpSSE` stream and the handshake of a `websocket` are
+all HTTP requests, and all three can face an endpoint that expects a header:
+
+```json
+"customHeaders": {
+    "X-Key1":  "headerValue1",
+    "X-TOTP":  {
+                   "valueProvider":  "TOTP",
+                   "parameters":   { "sharedSecret": "abcdefghijklmnopqrstuvwxyz1234567890" }
+               }
+}
+```
+
+#### Header names
+
+A name is an HTTP field name, which RFC 9110 defines as a `token`: one or more
+of the characters
+
+    A-Z  a-z  0-9  ! # $ % & ' * + - . ^ _ ` | ~
+
+and nothing else — no spaces, no colons, no non-ASCII, no empty name. HTTP
+compares names case-insensitively, so a document that states `X-Key` and
+`x-key` states **one** header; which of the two wins is the client's rule, not
+this format's (the Chargy WebApp keeps the first).
+
+Some names are legal tokens and still never arrive: a browser refuses to let a
+page set `Host`, `Origin`, `Referer`, `Cookie`, `Content-Length`, `Connection`,
+`Date`, `Expect`, `Keep-Alive`, `TE`, `Trailer`, `Transfer-Encoding`,
+`Upgrade`, `Via`, `Accept-Encoding`, `Accept-Charset`, or anything beginning
+with `Proxy-` or `Sec-`. Stating one is asking for something that cannot
+happen. Operators should use their own names — `X-…`, `Authorization`, an API
+key header their backend defines.
+
+#### Header values
+
+**A value is always a string: the literal text to send.** A JSON object in a
+value position is never a value — it is always a **call to a value provider**,
+because some values cannot be written into a document at all: a one-time
+password would be stale the moment it was. Nothing else is a value; a number, a
+boolean, an array or `null` is a mistake, and the entry is dropped.
+
+```json
+"X-Key1":  "headerValue1",
+"X-TOTP":  { "valueProvider": "TOTP", "parameters": { "sharedSecret": "…" } }
+```
+
+| Property | Required | Format | Meaning |
+|----------|----------|--------|---------|
+| `valueProvider` | yes | string | Which provider computes the value. Compared case-insensitively. |
+| `parameters` | no | object | What that provider needs. Its shape belongs to the provider. |
+
+Version 1.0 defines this shape, not the providers themselves. A client that
+does not know a provider sends **no header** for it rather than the description
+of one, and the request goes out without it.
+
+#### The `TOTP` provider
+
+The one provider the Chargy WebApp implements. It computes the value with
+[`@open-charging-cloud/totp`](https://www.npmjs.com/package/@open-charging-cloud/totp),
+freshly for **every single request**:
+
+```json
+"X-TOTP": {
+    "valueProvider": "TOTP",
+    "parameters": {
+        "sharedSecret":  "abcdefghijklmnopqrstuvwxyz1234567890",
+        "validityTime":   30,
+        "totpLength":     12,
+        "alphabet":      "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ",
+        "hashAlgorithm": "sha256"
+    }
+}
+```
+
+| Parameter | Required | Meaning | Default |
+|-----------|----------|---------|---------|
+| `sharedSecret` | yes | Shared secret, at least 16 characters, no whitespace | — |
+| `validityTime` | no | Slot duration in seconds | `30` |
+| `totpLength` | no | Length of the generated token | `12` |
+| `alphabet` | no | Characters the token is built from | digits + lower + upper case |
+| `hashAlgorithm` | no | `sha256`, `sha384` or `sha512` | `sha256` |
+
+The **moment is not a parameter**: it is always the instant the request is
+made. A timestamp taken from a document would freeze the password at whatever
+instant it was written, which is the one thing a time-based password must never
+be. Of the three passwords the generator returns — previous, current, next —
+the current one is sent; the other two exist for a verifier that has to
+tolerate a clock difference, and sending them would be the client tolerating
+its own. A provider whose parameters do not hold up (no secret, a secret the
+generator refuses) contributes no header, and the request still goes out.
+
+#### What a client drops
+
+A client sends only what it can send. The Chargy WebApp drops the individual
+entries that fail any rule above — a name that is not a token or one the
+browser would refuse, a value that is not visible ASCII, an empty or
+implausibly long value, a second spelling of a name already taken, a provider
+it does not know — and caps how many headers one document may add to every
+request. One unusable entry costs its own header and nothing else: neither the
+other headers nor the request. The headers reach the URLs of the transport that
+stated them and nothing else, and no redirect carries them anywhere unvetted.
 
 The request says which version the client already has, as
 `lastUpdated=<timestamp>` next to whatever the URL already carries, so a server
@@ -359,6 +535,186 @@ whose `@id` names a different session changes nothing. Neither does a request
 that fails: the transports belong to the operator, and a station that cannot be
 reached for a while is not a reason to drop a document that was loaded
 successfully.
+
+### What operators must provide: CORS
+
+Transparency software runs in browsers, and a browser only lets a page read a
+cross-origin answer when the server allows it. Endpoints behind `https` and
+`httpSSE` transports therefore **must** answer with
+
+    Access-Control-Allow-Origin: *
+
+Clients fetch anonymously — no cookies, no ambient credentials; the access
+token travels in the URL — so the wildcard is safe and correct here. Without
+this header no browser-based verifier can ever read the answer, whatever its
+user allows: this is the one thing no client can fix on its own side.
+`websocket` transports are not subject to CORS; a server that cares should
+check the `Origin` header itself.
+
+A transport that states `customHeaders` needs more than that one header. A
+custom header is not on the CORS safelist, so the browser asks before it sends
+anything: an `OPTIONS` request to the very same URL, carrying nothing of the
+actual request but its description — no cookies, and not the header it is
+asking about.
+
+    OPTIONS /chargingSessions/1234567890/transparency/live?token=abcdef HTTP/1.1
+    Host: api1.example.com
+    Origin: https://chargy.charging.cloud
+    Access-Control-Request-Method: GET
+    Access-Control-Request-Headers: x-key1
+
+The endpoint has to answer that with a 2xx and no redirect, and it must not
+require authentication for it — the preflight has nothing to authenticate with:
+
+    HTTP/1.1 204 No Content
+    Access-Control-Allow-Origin:  *
+    Access-Control-Allow-Methods: GET, OPTIONS
+    Access-Control-Allow-Headers: X-Key1
+    Access-Control-Max-Age:       600
+
+`Access-Control-Allow-Headers` has to name **every** header the document
+states, compared case-insensitively; `*` is valid here precisely because the
+request carries no credentials. `Access-Control-Max-Age` is what keeps a
+ten-second poll from paying for a preflight every single time — Chrome caps the
+value at 7200 seconds, Firefox at 86400. An endpoint that echoes the `Origin`
+instead of answering `*` owes a `Vary: Origin`, or a cache in between will hand
+the wrong permission to the next reader.
+
+And the answer to the actual `GET` still needs its own
+`Access-Control-Allow-Origin`: a preflight only permits the request to be sent,
+it does not make the response readable.
+
+### What a client may do with these URLs
+
+The URLs arrive inside a document from outside, and the signatures do not make
+them benign — a malicious operator signs a malicious document flawlessly (see
+[What the signatures do not prove](#what-the-signatures-do-not-prove)). A
+client is therefore expected to guard the connection:
+
+- only encrypted transports are contacted (`https`, `wss`),
+- hosts that are not on the public internet are refused, so a document cannot
+  turn the reader's browser into a probe for the network behind their router,
+- the `refresh` period is clamped from below — the Chargy WebApp polls no
+  faster than every 5 seconds, whatever the document says — and answers are
+  capped in size,
+- and endpoints the installation has not pre-approved are only contacted with
+  the **user's consent**, asked once per origin and remembered: trust on first
+  use, revocable at any time. The consent is **per origin**, decided one origin
+  at a time even when a single document lists several: approving the operator's
+  server a reader recognises does not carry along an attacker's server listed
+  beside it.
+
+None of this is configurable at runtime, and no document can ask for an
+exception: the rules are what the client is, not what it is set to.
+
+### What a test bench may do, and what it costs
+
+An endpoint under development is often none of those things — it speaks plain
+`http`, or it sits on the local network. The Chargy WebApp therefore takes that
+decision where such a decision belongs, at **build time**. Not at run time, and
+not by mode either: an ordinary development build is exactly as strict as a
+production one. Only a build that was explicitly asked for it —
+
+    npm run start:testbench
+
+— relaxes anything, and it relaxes exactly three things:
+
+- `http://` and `ws://` URLs are used at all (`--env insecureTransports`),
+- hosts on the local network are reached (`--env privateNetworkTransports`),
+- and the page's own Content-Security-Policy adds `http:` and `ws:` to its
+  `connect-src`, because the browser is a second gate in front of every rule
+  the application applies itself: without this the application would decide to
+  poll and the browser would refuse it.
+
+Everything else stays exactly as it is: the consent dialog per origin,
+`externalURLs.conf`, the clamped `refresh`, the capped answer size, the refused
+redirect, and the validation of the custom headers. An application served from
+`localhost` could always talk to `localhost`, with or without this build.
+
+**A production build compiles none of it in.** `npm run build:production`
+ignores both switches — the environment variable, the `--env` argument, and
+anything else that asks — prints a warning saying so, and keeps its
+`connect-src` at `'self' https: wss:`. What is shipped can never speak
+plaintext. Between a development and a production build the generated page does
+not differ here at all; between either of those and a test bench build it
+differs in one token list, the `connect-src`.
+
+The consequence belongs to whoever writes documents, not just to whoever builds
+clients: **a document whose transports name `http://`, `ws://` or a
+local-network host reloads on a test bench and nowhere else.** In every
+deployed client it is refused with a console line and nothing else — no dialog,
+no error on screen, because a document that cannot be reloaded is not a broken
+document. Such transports are a bench shape, never a published one.
+
+### How the remembered decisions are stored
+
+The remembered decisions are themselves worth protecting, and the Chargy WebApp
+stores them the way OpenSSH stores a hashed `known_hosts`: **the origin is not
+written down**. Each entry keeps a fresh random salt and the keyed hash of the
+origin (`HMAC-SHA-256`, the salt as key), together with the decision, its date,
+and the operator name the user saw in the consent dialog as a human-readable
+label. The store can still answer *"have I seen this origin?"* — the candidate
+arrives in plain text with every live link — but a copy of the store answers
+little on its own. The label is the document's claim, not a verified identity
+— it is what the user consented under, kept for recognition, and a label that
+contains the origin's own hostname is not stored at all, so no name can smuggle
+the plain text back in:
+
+- It no longer reveals **where its owner charges**. A list of consented
+  live-data origins is a movement profile: which operators, since when. A
+  synced browser profile, a backup, or a moment of access to the machine
+  should not hand that out.
+- It is worthless as a **harvesting target against the operators**. A clear
+  text store would double as a curated list of CPO live-data endpoints,
+  exactly what address-harvesting attacks collect; a hashed one names no
+  server. This is the same reasoning that put hashing into OpenSSH's
+  `known_hosts`, where the file had turned into a road map for worms.
+- The **per-entry salt** prevents precomputed tables and correlation: the same
+  origin hashes differently in every entry and every installation, so two
+  stores cannot be matched against each other, and nobody can tell whether two
+  readers charge with the same operator.
+- The honest limit, the same one OpenSSH has: endpoints on **public lists**
+  can still be tested against each entry, one guess at a time. The protection
+  is real for what is not publicly enumerable, and it turns "read the file"
+  into "brute-force every entry" for everything else.
+
+The hash **algorithm is stored per entry**, so a future switch — say, to
+HMAC-SHA512 — needs no migration: new entries simply use the new algorithm,
+old ones keep matching with theirs, and an entry whose algorithm a version
+does not know is preserved rather than deleted.
+
+Decisions also **expire on disuse**, after six months without use by default;
+the settings screen accepts anything from 1 to 120 months, or turns expiry off.
+Every time a decision actually decides something — an allowed origin is polled,
+a denied one is blocked — its clock restarts, so an entry in regular use never
+expires and nobody is asked to re-confirm what they demonstrably still rely on.
+What fades is what stopped being used: a stale "always" whose server no longer
+appears in any document, entries for endpoints an operator has long since
+retired. Idle expiry, not forced re-consent.
+
+Two gates decide this, and they are independent. `externalURLs.conf` is what
+the application consults: an origin listed there is polled without a dialog,
+and so is the installation's own origin; any other origin prompts the user.
+The Content-Security-Policy is what the browser enforces: `connect-src` bounds
+which hosts the page may reach at all. A deployment that lists an operator's
+hosts in `externalURLs.conf` therefore gives its users no dialog for those
+hosts, and one that additionally narrows `connect-src` to the same hosts lets
+the browser refuse everything else — including, then, the very origins a trust
+dialog might otherwise offer, so on such a deployment approving one has no
+effect. The two gates have to agree: a prefix allowed in `externalURLs.conf`
+but missing from `connect-src` is refused by the browser rather than by Chargy.
+
+A self-hosting operator whose documents only ever point at its own servers can
+close the dialog off entirely with a `mode strict` line in `externalURLs.conf`.
+In strict mode an origin no prefix covers is never offered and never polled —
+only the listed prefixes and the app's own origin reload — so a driver is never
+asked a trust question they cannot judge, and the deployment behaves the same
+in every browser regardless of what any user answered before. The operator then
+has to list every server its documents reach; an unlisted one simply does not
+reload, with only a console message to show for it. The default is `mode open`:
+the trust dialog as described above. This shapes only whether Chargy *asks*;
+what the browser *permits* is still the `connect-src` gate, and the two are set
+independently.
 
 ## A series of documents
 
@@ -435,6 +791,11 @@ means checking that no document quietly rewrites history:
 - Once a document contains an **end value** (`TX: "E"`), no later document may
   add anything. The session is over; a value appearing afterwards means the
   series is not what it claims to be.
+- The tariff list in an OCMF document's `TT` may only **grow**, and the entries
+  already there must stay unchanged and in place. It records the tariffs that
+  have been in effect so far, so a later document appends to that history and
+  never rewrites it — the same append-only rule as for the values themselves.
+  See [The tariff texts](OCMF-Test-01/README.md#the-tariff-texts).
 - `lastUpdated` must not go backwards.
 
 None of this follows from the signatures. Each document is perfectly signed on

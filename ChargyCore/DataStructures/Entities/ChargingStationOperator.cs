@@ -32,9 +32,9 @@ namespace cloud.charging.open.chargy
     /// about the charging process, and whom to ask about a disputed bill.
     /// </summary>
     /// <param name="Id">The identification of the charging station operator.</param>
-    /// <param name="Contact">How to reach the operator.</param>
-    /// <param name="Support">Where an EV driver can get help.</param>
-    /// <param name="Privacy">Whom to ask about the personal data of a record.</param>
+    /// <param name="Contact">How to reach the operator, if the record says.</param>
+    /// <param name="Support">Where an EV driver can get help, if the record says.</param>
+    /// <param name="Privacy">Whom to ask about the personal data of a record, if the record says.</param>
     /// <param name="Context">An optional JSON-LD context.</param>
     /// <param name="SubCSOIds">Optional identifications of sub-operators.</param>
     /// <param name="Description">An optional multi-language description.</param>
@@ -45,10 +45,11 @@ namespace cloud.charging.open.chargy
     /// <param name="ChargingTariffs">Optional charging tariffs.</param>
     /// <param name="ParkingTariffs">Optional parking tariffs.</param>
     /// <param name="PublicKeys">Optional public keys of the operator.</param>
+    /// <param name="Name">An optional multi-language name.</param>
     public class ChargingStationOperator(String                         Id,
-                                         Contact                        Contact,
-                                         Support                        Support,
-                                         PrivacyContact                 Privacy,
+                                         Contact?                       Contact,
+                                         Support?                       Support,
+                                         PrivacyContact?                Privacy,
                                          IEnumerable<String>?           Context           = null,
                                          IEnumerable<String>?           SubCSOIds         = null,
                                          I18NString?                    Description       = null,
@@ -58,7 +59,8 @@ namespace cloud.charging.open.chargy
                                          IEnumerable<EVSE>?             EVSEs             = null,
                                          IEnumerable<ChargingTariff>?   ChargingTariffs   = null,
                                          IEnumerable<ParkingTariff>?    ParkingTariffs    = null,
-                                         IEnumerable<PublicKey>?        PublicKeys        = null)
+                                         IEnumerable<PublicKey>?        PublicKeys        = null,
+                                         I18NString?                    Name              = null)
     {
 
         #region Properties
@@ -66,14 +68,24 @@ namespace cloud.charging.open.chargy
         /// <summary>The identification of the charging station operator.</summary>
         public String                            Id                  { get; } = Id;
 
-        /// <summary>How to reach the operator.</summary>
-        public Contact                           Contact             { get; } = Contact;
+        /// <summary>
+        /// How to reach the operator, if the record says.
+        ///
+        /// Optional since upstream 0.16.0, together with the two below: no
+        /// document in either repository carries any of them, nothing upstream
+        /// validates them, and requiring them dropped every operator of every
+        /// record that left them out.
+        /// </summary>
+        public Contact?                          Contact             { get; } = Contact;
 
-        /// <summary>Where an EV driver can get help.</summary>
-        public Support                           Support             { get; } = Support;
+        /// <summary>Where an EV driver can get help, if the record says.</summary>
+        public Support?                          Support             { get; } = Support;
 
-        /// <summary>Whom to ask about the personal data of a record.</summary>
-        public PrivacyContact                    Privacy             { get; } = Privacy;
+        /// <summary>Whom to ask about the personal data of a record, if the record says.</summary>
+        public PrivacyContact?                   Privacy             { get; } = Privacy;
+
+        /// <summary>An optional multi-language name.</summary>
+        public I18NString?                       Name                { get; } = Name;
 
         /// <summary>An optional JSON-LD context.</summary>
         public IReadOnlyList<String>             JSONLDContext       { get; } = Context?.         ToArray() ?? [];
@@ -138,10 +150,6 @@ namespace cloud.charging.open.chargy
             if (JSON["privacy"] is JObject privacyJSON)
                 chargy.PrivacyContact.TryParse(privacyJSON, out privacy);
 
-            // Contact, support and privacy are mandatory in the CTR format: an
-            // operator an EV driver cannot reach is of no use in a dispute.
-            if (contact is null || support is null || privacy is null)
-                return false;
 
             var chargingPools    = new List<ChargingPool>();
             var chargingStations = new List<ChargingStation>();
@@ -174,7 +182,10 @@ namespace cloud.charging.open.chargy
                                           EntityLists.ParseEVSEs          (JSON["EVSEs"]),
                                           EntityLists.ParseChargingTariffs(JSON["chargingTariffs"]),
                                           EntityLists.ParseParkingTariffs (JSON["parkingTariffs"]),
-                                          PublicKeyList.Parse             (JSON["publicKeys"])
+                                          PublicKeyList.Parse             (JSON["publicKeys"]),
+                                          JSON["name"] is JObject nameJSON
+                                              ? I18NString.Parse(nameJSON)
+                                              : null
                                       );
 
             return true;
@@ -204,12 +215,20 @@ namespace cloud.charging.open.chargy
             if (SubCSOIds.Count > 0)
                 json.Add(new JProperty("subCSOIds",         new JArray(SubCSOIds)));
 
+            if (Name.IsNotNullOrEmpty())
+                json.Add(new JProperty("name",              Name.ToJSON()));
+
             if (Description.IsNotNullOrEmpty())
                 json.Add(new JProperty("description",       Description.ToJSON()));
 
-            json.Add(new JProperty("contact",               Contact.ToJSON()));
-            json.Add(new JProperty("support",               Support.ToJSON()));
-            json.Add(new JProperty("privacy",               Privacy.ToJSON()));
+            if (Contact is not null)
+                json.Add(new JProperty("contact",           Contact.ToJSON()));
+
+            if (Support is not null)
+                json.Add(new JProperty("support",           Support.ToJSON()));
+
+            if (Privacy is not null)
+                json.Add(new JProperty("privacy",           Privacy.ToJSON()));
 
             if (GeoLocation.HasValue)
                 json.Add(new JProperty("geoLocation",       GeoLocation.Value.ToJSON()));

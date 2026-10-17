@@ -116,7 +116,7 @@ switch (result)
         break;
 
     case ChargeTransparencyLiveLink liveLink:
-        Console.WriteLine($"{liveLink.Transports.Count} way(s) to reach the station");
+        Console.WriteLine($"{liveLink.LiveTransports.Count} way(s) to reach the station");
         break;
 
     case PublicKeyLookup keys:
@@ -249,8 +249,16 @@ application prefers. Within a transport, addresses are chosen the way DNS choose
 service records — lower `priority` first, equal priorities drawn in proportion to their
 `weight` — and an address that never answers is passed over for the next. An `https`
 transport may state a `refresh` period, which is how often the station itself thinks it
-is worth asking again; the client's own interval applies only where a document says
-nothing.
+is worth asking again; the client's own interval, ten seconds unless configured, applies
+only where a document says nothing. A transport may also name `customHeaders` its
+endpoint expects; the literal ones are sent with every request to it.
+
+A live link read through the detector says whether it is signed. The operator may sign
+the document as a whole, which is what ties the addresses and the listed keys to whoever
+signed them, and a grid operator signs the power constraints it sends.
+`SignatureVerification` holds the outcome per signature, and `Warnings` what did not
+verify — never a reason to refuse the document, since its transports still work and its
+meter values carry signatures of their own.
 
 A live link may also carry the signed meter values measured so far, and those are
 evidence like any other — no request, no observation, they are in the document already:
@@ -357,12 +365,12 @@ endings by default. [`.gitattributes`](.gitattributes) prevents that, and the Wi
 is what proves it — before building, every tracked file on disk is compared against the
 bytes the repository holds. The GitHub Windows image runs with `core.autocrlf=true` and
 does rewrite the repository's other files — 199 of them the last time the leg reported a
-count; all 236 fixtures come through untouched.
+count; all 256 fixtures come through untouched.
 
 A [nightly workflow](.github/workflows/nightly.yml) runs the same suite again when nobody
 pushed, because Styx and Hermod are not pinned — they are sibling checkouts of master, so a
 breaking change there is a red night with nothing in this repository having moved. It also
-compares all 236 fixtures with `ChargyCore.TS` byte for byte, which is the one half of the
+compares all 256 fixtures with `ChargyCore.TS` byte for byte, which is the one half of the
 parity contract neither test suite can check on its own: each only ever sees its own copy.
 
 All cryptography is provided by [BouncyCastle](https://www.bouncycastle.org/) — ECDSA over

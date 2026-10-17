@@ -23,6 +23,7 @@ using Newtonsoft.Json;
 
 using org.GraphDefined.Vanaheimr.Illias;
 
+using cloud.charging.open.chargy.Crypto;
 using cloud.charging.open.chargy.IO;
 
 #endregion
@@ -296,12 +297,32 @@ namespace cloud.charging.open.chargy.cli
                     output.WriteLine($"    {url}");
 
                 if (transport.TOTP is not null)
-                    output.WriteLine($"    (behind a one-time password, changing every {transport.TOTP.TimeStep} seconds)");
+                    output.WriteLine((transport.TOTP.ValidityTime ?? transport.TOTP.TimeStep) is Double seconds
+                                         ? $"    (behind a one-time password, changing every {seconds.ToString(CultureInfo.InvariantCulture)} seconds)"
+                                         :  "    (behind a one-time password)");
+
+                if (transport.CustomHeaders.Count > 0)
+                    output.WriteLine($"    (sends the header(s) {String.Join(", ", transport.CustomHeaders.Keys)})");
 
                 if (transport.Refresh is TimeSpan refresh)
                     output.WriteLine($"    (asks again every {refresh.TotalSeconds.ToString(CultureInfo.InvariantCulture)} seconds)");
 
             }
+
+            #region Who signed the link, if anyone
+
+            // The signatures over the whole document are what tie the addresses
+            // and the listed keys to whoever signed them. None of what they say
+            // makes the link unusable, so none of it changes the exit code.
+            if (LiveLink.SignatureVerification is DocumentSignaturesResult signatures)
+                output.WriteLine(signatures.Status == DocumentSignaturesStatus.Unsigned
+                                     ? "  signed:     no"
+                                     : $"  signed:     {signatures.ValidCount} of {signatures.Signatures.Count} signature(s) valid");
+
+            foreach (var warning in LiveLink.Warnings)
+                output.WriteLine($"  Warning: {i18n.GetLocalizedText(warning.Message)}");
+
+            #endregion
 
             #region ..., and the readings the link already carries
 

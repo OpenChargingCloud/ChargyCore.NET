@@ -162,13 +162,15 @@ namespace cloud.charging.open.chargy
             }
 
             if (JSON is JObject json &&
-                json["url"]?.Value<String>() is String objectURL)
+                json["url"]?.Type == JTokenType.String &&
+                IsOptionalNumber(json["priority"])     &&
+                IsOptionalNumber(json["weight"]))
             {
 
                 TransportURL = new TransportURL(
-                                   objectURL,
-                                   json["priority"]?.Value<Int32>(),
-                                   json["weight"]?.  Value<Int32>()
+                                   json["url"]!.Value<String>()!,
+                                   json["priority"] is JValue priority ? (Int32) Math.Round(priority.Value<Double>()) : null,
+                                   json["weight"]   is JValue weight   ? (Int32) Math.Round(weight.  Value<Double>()) : null
                                );
 
                 return true;
@@ -178,6 +180,19 @@ namespace cloud.charging.open.chargy
             return false;
 
         }
+
+        #endregion
+
+        #region (private, static) IsOptionalNumber(JSON)
+
+        /// <summary>
+        /// Whether the given property is absent or a number.
+        /// </summary>
+        /// <param name="JSON">A property value, if there is one.</param>
+        private static Boolean IsOptionalNumber(JToken? JSON)
+
+            => JSON is null ||
+               JSON.Type is JTokenType.Integer or JTokenType.Float;
 
         #endregion
 
@@ -226,20 +241,50 @@ namespace cloud.charging.open.chargy
     /// <summary>
     /// A time-based one-time password configuration, used to authenticate against
     /// a live link without a long-lived secret travelling in the QR code.
+    ///
+    /// The shape is the one the TOTP library takes. Only the secret is required;
+    /// everything else falls back to what both sides default to. Upstream 0.15.0
+    /// renamed "initialSharedSecret" to "sharedSecret" without a fallback, so a
+    /// configuration still spelling it the old way is not one.
     /// </summary>
-    /// <param name="InitialSharedSecret">The shared secret.</param>
-    /// <param name="TimeStep">The length of one time step in seconds.</param>
-    public class TOTPConfig(String  InitialSharedSecret,
-                            Int32   TimeStep)
+    /// <param name="SharedSecret">The shared secret.</param>
+    /// <param name="TimeStep">The optional length of one time step in seconds.</param>
+    /// <param name="ValidityTime">The optional time one password stays valid, in seconds.</param>
+    /// <param name="TOTPLength">The optional length of a password.</param>
+    /// <param name="Alphabet">The optional alphabet a password is made of.</param>
+    /// <param name="Timestamp">An optional timestamp the configuration states.</param>
+    /// <param name="HashAlgorithm">The optional HMAC hash algorithm, e.g. "SHA-256".</param>
+    public class TOTPConfig(String   SharedSecret,
+                            Double?  TimeStep       = null,
+                            Double?  ValidityTime   = null,
+                            Int32?   TOTPLength     = null,
+                            String?  Alphabet       = null,
+                            String?  Timestamp      = null,
+                            String?  HashAlgorithm  = null)
     {
 
         #region Properties
 
         /// <summary>The shared secret.</summary>
-        public String  InitialSharedSecret    { get; } = InitialSharedSecret;
+        public String   SharedSecret     { get; } = SharedSecret;
 
-        /// <summary>The length of one time step in seconds.</summary>
-        public Int32   TimeStep               { get; } = TimeStep;
+        /// <summary>The optional length of one time step in seconds.</summary>
+        public Double?  TimeStep         { get; } = TimeStep;
+
+        /// <summary>The optional time one password stays valid, in seconds.</summary>
+        public Double?  ValidityTime     { get; } = ValidityTime;
+
+        /// <summary>The optional length of a password.</summary>
+        public Int32?   TOTPLength       { get; } = TOTPLength;
+
+        /// <summary>The optional alphabet a password is made of.</summary>
+        public String?  Alphabet         { get; } = Alphabet;
+
+        /// <summary>An optional timestamp the configuration states.</summary>
+        public String?  Timestamp        { get; } = Timestamp;
+
+        /// <summary>The optional HMAC hash algorithm, e.g. "SHA-256".</summary>
+        public String?  HashAlgorithm    { get; } = HashAlgorithm;
 
         #endregion
 
@@ -256,13 +301,29 @@ namespace cloud.charging.open.chargy
 
             TOTPConfig = null;
 
-            var secret   = JSON["initialSharedSecret"]?.Value<String>();
-            var timeStep = JSON["timeStep"];
+            static Boolean IsOptional(JToken? JSON, params JTokenType[] Types)
+                => JSON is null || Types.Contains(JSON.Type);
 
-            if (secret is null || timeStep is null || timeStep.Type != JTokenType.Integer)
+            if (JSON["sharedSecret"]?.Type != JTokenType.String                           ||
+                !IsOptional(JSON["timeStep"],      JTokenType.Integer, JTokenType.Float) ||
+                !IsOptional(JSON["validityTime"],  JTokenType.Integer, JTokenType.Float) ||
+                !IsOptional(JSON["totpLength"],    JTokenType.Integer, JTokenType.Float) ||
+                !IsOptional(JSON["alphabet"],      JTokenType.String)                    ||
+                !IsOptional(JSON["timestamp"],     JTokenType.String)                    ||
+                !IsOptional(JSON["hashAlgorithm"], JTokenType.String))
+            {
                 return false;
+            }
 
-            TOTPConfig = new TOTPConfig(secret, timeStep.Value<Int32>());
+            TOTPConfig = new TOTPConfig(
+                             JSON["sharedSecret"]!.Value<String>()!,
+                             JSON["timeStep"]?.     Value<Double>(),
+                             JSON["validityTime"]?. Value<Double>(),
+                             JSON["totpLength"] is JValue totpLength ? (Int32) Math.Round(totpLength.Value<Double>()) : null,
+                             JSON["alphabet"]?.     Value<String>(),
+                             JSON["timestamp"]?.    Value<String>(),
+                             JSON["hashAlgorithm"]?.Value<String>()
+                         );
 
             return true;
 
@@ -276,11 +337,33 @@ namespace cloud.charging.open.chargy
         /// Return a JSON representation of this TOTP configuration.
         /// </summary>
         public JObject ToJSON()
+        {
 
-            => new (
-                   new JProperty("initialSharedSecret",  InitialSharedSecret),
-                   new JProperty("timeStep",             TimeStep)
-               );
+            var json = new JObject(
+                           new JProperty("sharedSecret",  SharedSecret)
+                       );
+
+            if (TimeStep.     HasValue)
+                json.Add(new JProperty("timeStep",       TimeStep.    Value));
+
+            if (ValidityTime. HasValue)
+                json.Add(new JProperty("validityTime",   ValidityTime.Value));
+
+            if (TOTPLength.   HasValue)
+                json.Add(new JProperty("totpLength",     TOTPLength.  Value));
+
+            if (Alphabet      is not null)
+                json.Add(new JProperty("alphabet",       Alphabet));
+
+            if (Timestamp     is not null)
+                json.Add(new JProperty("timestamp",      Timestamp));
+
+            if (HashAlgorithm is not null)
+                json.Add(new JProperty("hashAlgorithm",  HashAlgorithm));
+
+            return json;
+
+        }
 
         #endregion
 
@@ -291,7 +374,9 @@ namespace cloud.charging.open.chargy
         /// </summary>
         public override String ToString()
 
-            => $"TOTP every {TimeStep}s";
+            => (ValidityTime ?? TimeStep) is Double seconds
+                   ? $"TOTP every {seconds.ToString(CultureInfo.InvariantCulture)}s"
+                   :  "TOTP";
 
         #endregion
 
@@ -300,26 +385,176 @@ namespace cloud.charging.open.chargy
 
 
     /// <summary>
+    /// One value of a transport's custom HTTP headers: either the literal string
+    /// to send, or a provider that computes the value per request — a one-time
+    /// password, say, which would be stale the moment it was written into a
+    /// document.
+    ///
+    /// The format defines the shape, not the providers: what "TOTP" means needs
+    /// an external profile. A client that does not know a provider sends no header
+    /// for it rather than the description of one.
+    /// </summary>
+    public sealed class CustomHeaderValue
+    {
+
+        #region Properties
+
+        /// <summary>The literal value to send, or null for a provider.</summary>
+        public String?   Literal          { get; }
+
+        /// <summary>The name of the provider computing the value, or null for a literal.</summary>
+        public String?   ValueProvider    { get; }
+
+        /// <summary>The optional parameters of the provider.</summary>
+        public JObject?  Parameters       { get; }
+
+        /// <summary>Whether the value is computed per request rather than stated.</summary>
+        public Boolean   IsProvider
+            => ValueProvider is not null;
+
+        #endregion
+
+        #region Constructor(s)
+
+        private CustomHeaderValue(String?   Literal,
+                                  String?   ValueProvider,
+                                  JObject?  Parameters)
+        {
+            this.Literal        = Literal;
+            this.ValueProvider  = ValueProvider;
+            this.Parameters     = Parameters;
+        }
+
+        /// <summary>
+        /// A literal header value.
+        /// </summary>
+        /// <param name="Value">The value to send.</param>
+        public static CustomHeaderValue FromLiteral(String Value)
+
+            => new (Value, null, null);
+
+        /// <summary>
+        /// A header value computed per request.
+        /// </summary>
+        /// <param name="ValueProvider">The name of the provider.</param>
+        /// <param name="Parameters">Its optional parameters.</param>
+        public static CustomHeaderValue FromProvider(String    ValueProvider,
+                                                     JObject?  Parameters = null)
+
+            => new (null, ValueProvider, Parameters);
+
+        #endregion
+
+
+        #region (static) TryParse(JSON, out CustomHeaderValue)
+
+        /// <summary>
+        /// Try to parse the given JSON as a custom header value.
+        /// </summary>
+        /// <param name="JSON">A JSON representation of a custom header value.</param>
+        /// <param name="CustomHeaderValue">The parsed custom header value.</param>
+        public static Boolean TryParse(JToken? JSON, out CustomHeaderValue? CustomHeaderValue)
+        {
+
+            CustomHeaderValue = JSON switch {
+
+                                    { Type: JTokenType.String }
+                                        => FromLiteral(JSON.Value<String>()!),
+
+                                    JObject provider when provider["valueProvider"]?.Type == JTokenType.String &&
+                                                         (provider["parameters"] is null || provider["parameters"] is JObject)
+                                        => FromProvider(provider["valueProvider"]!.Value<String>()!, provider["parameters"] as JObject),
+
+                                    _   => null
+
+                                };
+
+            return CustomHeaderValue is not null;
+
+        }
+
+        #endregion
+
+        #region ToJSON()
+
+        /// <summary>
+        /// Return a JSON representation of this custom header value.
+        /// </summary>
+        public JToken ToJSON()
+        {
+
+            if (ValueProvider is null)
+                return new JValue(Literal);
+
+            var json = new JObject(
+                           new JProperty("valueProvider",  ValueProvider)
+                       );
+
+            if (Parameters is not null)
+                json.Add(new JProperty("parameters",  Parameters.DeepClone()));
+
+            return json;
+
+        }
+
+        #endregion
+
+        #region (override) ToString()
+
+        /// <summary>
+        /// Return a text representation of this custom header value.
+        /// </summary>
+        public override String ToString()
+
+            => Literal ?? $"<{ValueProvider}>";
+
+        #endregion
+
+    }
+
+
+    /// <summary>
     /// One way of reaching the live data of a charging station.
     /// </summary>
     /// <param name="Type">How this transport delivers its data.</param>
-    /// <param name="URL">An optional single URL.</param>
+    /// <param name="URL">An optional single endpoint, for a transport built in code.</param>
     /// <param name="URLs">Optional endpoints, when there is more than one.</param>
     /// <param name="TOTP">An optional TOTP configuration.</param>
     /// <param name="Refresh">How often to ask for the document again; HTTPS only.</param>
-    public class Transport(TransportType               Type,
-                           String?                     URL      = null,
-                           IEnumerable<TransportURL>?  URLs     = null,
-                           TOTPConfig?                 TOTP     = null,
-                           TimeSpan?                   Refresh  = null)
+    /// <param name="CustomHeaders">Optional HTTP headers to send with every request to this transport.</param>
+    public class Transport(TransportType                                    Type,
+                           String?                                          URL            = null,
+                           IEnumerable<TransportURL>?                       URLs           = null,
+                           TOTPConfig?                                      TOTP           = null,
+                           TimeSpan?                                        Refresh        = null,
+                           IEnumerable<KeyValuePair<String, CustomHeaderValue>>?  CustomHeaders  = null)
     {
+
+        #region Data
+
+        /// <summary>
+        /// How often an HTTPS transport is asked again when the document does not
+        /// say. A charging session that is still running changes every few
+        /// seconds, so "it did not say" means "the usual period", not "never ask
+        /// again" — upstream's defaultRefreshSeconds since 0.14.4.
+        /// </summary>
+        public static readonly TimeSpan DefaultRefresh = TimeSpan.FromSeconds(10);
+
+        #endregion
 
         #region Properties
 
         /// <summary>How this transport delivers its data.</summary>
         public TransportType                 Type       { get; } = Type;
 
-        /// <summary>An optional single URL.</summary>
+        /// <summary>
+        /// An optional single endpoint, for a transport built in code.
+        ///
+        /// The format names endpoints in "urls" and only there — the singular
+        /// "url" was the older spelling and upstream 0.15.0 stopped reading it —
+        /// so a document never sets this, and <see cref="ToJSON"/> writes it as
+        /// the first entry of "urls".
+        /// </summary>
         public String?                       URL        { get; } = URL;
 
         /// <summary>Optional endpoints, when there is more than one.</summary>
@@ -327,6 +562,17 @@ namespace cloud.charging.open.chargy
 
         /// <summary>An optional TOTP configuration.</summary>
         public TOTPConfig?                   TOTP       { get; } = TOTP;
+
+        /// <summary>
+        /// Additional HTTP headers to send with every request to this transport,
+        /// by header name — an API key or a tenant selector its endpoint expects.
+        ///
+        /// Every transport can carry them: an HTTPS poll, the opening request of
+        /// a server-sent event stream and the handshake of a WebSocket are all
+        /// HTTP requests. They belong to the transport that states them and are
+        /// sent to its endpoints alone.
+        /// </summary>
+        public IReadOnlyDictionary<String, CustomHeaderValue>  CustomHeaders    { get; } = CustomHeaders?.ToDictionary() ?? [];
 
         /// <summary>
         /// How often to ask for the document again.
@@ -360,20 +606,48 @@ namespace cloud.charging.open.chargy
 
             var urls = new List<TransportURL>();
 
-            if (JSON["urls"] is JArray urlArray)
+            if (JSON["urls"] is JToken urlsJSON)
+            {
+
+                if (urlsJSON is not JArray urlArray)
+                    return false;
+
                 foreach (var urlJSON in urlArray)
                     if (TransportURL.TryParse(urlJSON, out var transportURL))
                         urls.Add(transportURL!);
                     else
                         return false;
 
+            }
+
             TOTPConfig? totp = null;
 
-            if (JSON["totp"] is JObject totpJSON &&
-               !TOTPConfig.TryParse(totpJSON, out totp))
+            if (JSON["totp"] is JToken totpJSON &&
+               (totpJSON is not JObject totpObject ||
+                !TOTPConfig.TryParse(totpObject, out totp)))
             {
                 return false;
             }
+
+            #region The headers to send along
+
+            var customHeaders = new Dictionary<String, CustomHeaderValue>();
+
+            if (JSON["customHeaders"] is JToken customHeadersJSON)
+            {
+
+                if (customHeadersJSON is not JObject customHeadersObject)
+                    return false;
+
+                foreach (var header in customHeadersObject.Properties())
+                    if (CustomHeaderValue.TryParse(header.Value, out var value))
+                        customHeaders[header.Name] = value!;
+                    else
+                        return false;
+
+            }
+
+            #endregion
 
             #region How often to ask again
 
@@ -398,12 +672,16 @@ namespace cloud.charging.open.chargy
 
             #endregion
 
+            // The singular "url" is not read: upstream 0.15.0 made "urls" the one
+            // place a transport names its endpoints, and a transport carrying
+            // only "url" is a transport with nothing to reach.
             Transport = new Transport(
                             type,
-                            JSON["url"]?.Value<String>(),
+                            null,
                             urls,
                             totp,
-                            refresh
+                            refresh,
+                            customHeaders
                         );
 
             return true;
@@ -424,11 +702,11 @@ namespace cloud.charging.open.chargy
                            new JProperty("type", Type.AsText())
                        );
 
-            if (URL  is not null)
-                json.Add(new JProperty("url",   URL));
-
-            if (URLs.Count > 0)
-                json.Add(new JProperty("urls",  new JArray(URLs.Select(url => url.ToJSON()))));
+            if (URL is not null || URLs.Count > 0)
+                json.Add(new JProperty("urls",  new JArray(
+                                                    (URL is not null ? [ new JValue(URL) ] : Array.Empty<JToken>()).
+                                                    Concat(URLs.Select(url => url.ToJSON()))
+                                                )));
 
             if (TOTP is not null)
                 json.Add(new JProperty("totp",  TOTP.ToJSON()));
@@ -437,6 +715,11 @@ namespace cloud.charging.open.chargy
                 json.Add(new JProperty("refresh",  Refresh.Value.TotalSeconds % 1 == 0
                                                        ? new JValue((Int64) Refresh.Value.TotalSeconds)
                                                        : new JValue(        Refresh.Value.TotalSeconds)));
+
+            if (CustomHeaders.Count > 0)
+                json.Add(new JProperty("customHeaders",  new JObject(
+                                                             CustomHeaders.Select(header => new JProperty(header.Key, header.Value.ToJSON()))
+                                                         )));
 
             return json;
 
@@ -538,6 +821,43 @@ namespace cloud.charging.open.chargy
         /// </summary>
         public JObject?                    OriginalJSON      { get; } = OriginalJSON;
 
+        /// <summary>
+        /// How the signatures over this whole document came out, when the
+        /// document was read through the content format detector.
+        ///
+        /// Kept here rather than written into the document: the signatures cover
+        /// every property but their own, and <see cref="ToJSON"/> hands back the
+        /// document as it was signed.
+        /// </summary>
+        public Crypto.DocumentSignaturesResult?  SignatureVerification    { get; internal set; }
+
+        /// <summary>
+        /// Non-fatal findings about this document, e.g. that it is unsigned or
+        /// that a signature did not verify. None of them make it unusable.
+        /// </summary>
+        public IReadOnlyList<Warning>      Warnings
+            => warnings;
+
+        #endregion
+
+        #region Data (private)
+
+        private readonly List<Warning> warnings = [];
+
+        #endregion
+
+        #region (internal) AddWarning(Warning)
+
+        /// <summary>
+        /// Add a non-fatal finding about this document.
+        /// </summary>
+        /// <param name="Warning">A warning.</param>
+        internal ChargeTransparencyLiveLink AddWarning(Warning Warning)
+        {
+            warnings.Add(Warning);
+            return this;
+        }
+
         #endregion
 
 
@@ -546,10 +866,14 @@ namespace cloud.charging.open.chargy
         /// <summary>
         /// Whether the given JSON is a charge transparency live link.
         ///
-        /// The whole document is checked, not just its context. A live link is
-        /// not evidence to be judged but a list of addresses somebody is being
-        /// invited to contact, and a field that is not what it claims to be
-        /// makes the document unusable rather than merely incomplete.
+        /// A live link is recognised by its context and by the two properties
+        /// every one of them has: when it was created, and where its updates can
+        /// be fetched. Nothing optional decides it. A malformed optional field —
+        /// a broken transport most of all — must not turn the document into an
+        /// unrecognised one that then fails as an "unknown format"; it is dropped
+        /// where it is read, and the rest of the document stays usable. That is
+        /// upstream 0.15.0, and it reverses what this reader did before, which
+        /// refused the whole document over one transport it could not read.
         /// </summary>
         /// <param name="JSON">A JSON object.</param>
         public static Boolean IsAChargeTransparencyLiveLink(JObject JSON)
@@ -573,163 +897,120 @@ namespace cloud.charging.open.chargy
 
             ChargeTransparencyLiveLink = null;
 
-            if (JSON["@context"]?.Value<String>() != JSONLDContext)
+            #region The context, alone or in a list naming it among extensions
+
+            var isLiveLink = JSON["@context"] switch {
+                                 JValue { Type: JTokenType.String } context  => context.Value<String>() == JSONLDContext,
+                                 JArray contexts                              => contexts.All(context => context.Type == JTokenType.String) &&
+                                                                                 contexts.Any(context => context.Value<String>() == JSONLDContext),
+                                 _                                            => false
+                             };
+
+            if (!isLiveLink)
                 return false;
 
-            #region When the link was created, if it says
+            #endregion
 
-            String? created = null;
+            #region When the link was created, which every one of them says
 
-            if (JSON["created"] is JToken timestampJSON)
-                switch (timestampJSON.Type)
+            // Reading a document no longer fills in a missing timestamp: it would
+            // record when the document was read, and in a legally relevant
+            // document that is not what "created" means.
+            String? created;
+
+            switch (JSON["created"]?.Type)
+            {
+
+                case JTokenType.String:
+                    created = JSON["created"]!.Value<String>();
+                    break;
+
+                // A JSON reader that turns timestamps into dates of its own
+                // accord — which is the default of Newtonsoft — must not cost the
+                // caller their live link. The instant survives; only its spelling
+                // becomes the one Chargy writes.
+                case JTokenType.Date:
+                    // A JSON date arrives as a DateTime or as a DateTimeOffset,
+                    // depending on whether the text carried an offset.
+                    created = (JSON["created"] is JValue { Value: DateTimeOffset offset }
+                                   ? offset
+                                   : new DateTimeOffset(JSON["created"]!.Value<DateTime>().ToUniversalTime(), TimeSpan.Zero)).
+                              ToUniversalTime().
+                              ToString("yyyy-MM-dd'T'HH:mm:ss.fff'Z'", CultureInfo.InvariantCulture);
+                    break;
+
+                default:
+                    return false;
+
+            }
+
+            #endregion
+
+            #region How to reach it, which every one of them says too
+
+            if (JSON["liveTransports"] is not JArray transportArray)
+                return false;
+
+            // A transport that does not hold up is dropped, and the others are
+            // kept: the document is still a live link with working addresses.
+            var liveTransports = new List<Transport>();
+
+            foreach (var transportJSON in transportArray)
+                if (transportJSON is JObject transportObject &&
+                    Transport.TryParse(transportObject, out var transport))
                 {
-
-                    case JTokenType.Null:
-                        break;
-
-                    case JTokenType.String:
-                        created = timestampJSON.Value<String>();
-                        break;
-
-                    // A JSON reader that turns timestamps into dates of its own
-                    // accord — which is Newtonsoft's default — must not cost the
-                    // caller their live link. The instant survives; only its
-                    // spelling becomes the one Chargy writes. Nothing here is
-                    // signed, so nothing depends on the original characters.
-                    case JTokenType.Date:
-                        // A JSON date arrives as a DateTime or as a DateTimeOffset,
-                        // depending on whether the text carried an offset.
-                        created = (timestampJSON is JValue { Value: DateTimeOffset offset }
-                                       ? offset
-                                       : new DateTimeOffset(timestampJSON.Value<DateTime>().ToUniversalTime(), TimeSpan.Zero)).
-                                  ToUniversalTime().
-                                  ToString("yyyy-MM-dd'T'HH:mm:ss.fff'Z'", CultureInfo.InvariantCulture);
-                        break;
-
-                    default:
-                        return false;
-
+                    liveTransports.Add(transport!);
                 }
 
             #endregion
 
-            #region The fields that are simply what they are, or the document is not one
+            #region Everything optional, read where it holds up and dropped where it does not
 
-            if (JSON["description"] is JToken descriptionJSON &&
-                descriptionJSON     is not JObject)
-            {
-                return false;
-            }
+            var description = JSON["description"] is JObject descriptionJSON
+                                  ? I18NString.Parse(descriptionJSON)
+                                  : null;
 
-            if (JSON["imageURLs"]   is JToken imageURLsJSON &&
-               (imageURLsJSON       is not JArray imageURLArray ||
-                imageURLArray.Any(imageURL => imageURL.Type != JTokenType.String)))
-            {
-                return false;
-            }
+            var imageURLs   = JSON["imageURLs"] is JArray imageURLArray
+                                  ? imageURLArray.Where (imageURL => imageURL.Type == JTokenType.String).
+                                                  Select(imageURL => imageURL.Value<String>()!)
+                                  : null;
 
-            #endregion
+            // Upstream 3a2d3ad moved the position onto the charging station and
+            // 0.15.0 dropped it from the top level of the format; a document
+            // that still states it there is read, the station is asked otherwise.
+            var geoLocation = (JSON["geoLocation"] is JObject geoLocationJSON
+                                   ? GeoCoordinate.TryParse(geoLocationJSON)
+                                   : null) ??
+                              (JSON["chargingStation"]?["geoLocation"] is JObject stationLocation
+                                   ? GeoCoordinate.TryParse(stationLocation)
+                                   : null);
 
-            #region Where the charging station stands
-
-            GeoCoordinate? geoLocation = null;
-
-            if (JSON["geoLocation"] is JToken geoLocationJSON)
-            {
-
-                if (geoLocationJSON is not JObject geoLocationObject)
-                    return false;
-
-                geoLocation = GeoCoordinate.TryParse(geoLocationObject);
-
-                if (!geoLocation.HasValue)
-                    return false;
-
-            }
-
-            // Upstream 3a2d3ad moved the position onto the charging station,
-            // where a charge transparency record has always kept it, so a live
-            // link written since then states it there and nowhere else.
-            //
-            // Read leniently, unlike the property above: that one is what the
-            // type guard validates, so a malformed value there means the
-            // document is not a live link. Nobody validates the station block,
-            // and refusing a usable list of addresses over a bad coordinate
-            // inside it would be stricter than upstream for no gain.
-            geoLocation ??= JSON["chargingStation"]?["geoLocation"] is JObject stationLocation
-                                ? GeoCoordinate.TryParse(stationLocation)
-                                : null;
-
-            #endregion
-
-            #region How to reach it
-
-            var liveTransports = new List<Transport>();
-
-            if (JSON["liveTransports"] is JToken transportsJSON)
-            {
-
-                if (transportsJSON is not JArray transportArray)
-                    return false;
-
-                foreach (var transportJSON in transportArray)
-                    // An unreadable transport means the link cannot be trusted
-                    // to describe how to reach the station at all. Keeping the
-                    // readable ones and dropping the rest would leave an
-                    // application believing it had been told everything.
-                    if (transportJSON is not JObject transportObject ||
-                        !Transport.TryParse(transportObject, out var transport))
-                    {
-                        return false;
-                    }
-                    else
-                        liveTransports.Add(transport!);
-
-            }
-
+            // The connector moved below the EVSE below the charging station the
+            // same way.
             LiveLinkConnector? connector = null;
 
-            if (JSON["connector"] is JToken connectorJSON &&
-               (connectorJSON     is not JObject connectorObject ||
-                !LiveLinkConnector.TryParse(connectorObject, out connector)))
-            {
-                return false;
-            }
+            if (JSON["connector"] is JObject connectorJSON)
+                LiveLinkConnector.TryParse(connectorJSON, out connector);
 
-            // The connector moved below the EVSE below the charging station with
-            // the same commit, and is read there as leniently as the position.
             if (connector is null &&
                 JSON["chargingStation"]?["EVSE"]?["connector"] is JObject evseConnector)
             {
                 LiveLinkConnector.TryParse(evseConnector, out connector);
             }
 
-            #endregion
+            var signatures  = new List<Signature>();
 
-            #region ..., and who says so
-
-            var signatures = new List<Signature>();
-
-            if (JSON["signatures"] is JToken signaturesJSON)
-            {
-
-                if (signaturesJSON is not JArray signatureArray)
-                    return false;
-
+            if (JSON["signatures"] is JArray signatureArray)
                 foreach (var signatureJSON in signatureArray.OfType<JObject>())
                     if (Signature.TryParse(signatureJSON, out var signature))
                         signatures.Add(signature!);
-
-            }
 
             #endregion
 
             ChargeTransparencyLiveLink = new ChargeTransparencyLiveLink(
                                              created,
-                                             JSON["description"] is JObject description
-                                                 ? I18NString.Parse(description)
-                                                 : null,
-                                             StringList.Parse(JSON["imageURLs"]),
+                                             description,
+                                             imageURLs,
                                              geoLocation,
                                              connector,
                                              liveTransports,
@@ -756,8 +1037,8 @@ namespace cloud.charging.open.chargy
             // Everything this reader does not model would be lost otherwise, and
             // the signatures a live link may carry are taken over the whole
             // document. The one property that may have changed on the way in is
-            // the creation timestamp: a link that carried none is stamped when it
-            // is read, and a date token is rewritten the way Chargy spells one.
+            // the creation timestamp, and only when a JSON reader had turned it
+            // into a date token: that is rewritten the way Chargy spells one.
             if (OriginalJSON is not null)
             {
 

@@ -66,6 +66,7 @@ namespace cloud.charging.open.chargy
         private readonly List<Error>                    errors                    = [];
         private readonly List<Warning>                  warnings                  = [];
         private readonly List<ChargingStationOperator>  chargingStationOperators  = [];
+        private readonly List<GridOperator>             gridOperators             = [];
         private readonly List<ChargingPool>             chargingPools             = [];
         private readonly List<ChargingStation>          chargingStations          = [];
         private readonly List<ChargingTariff>           chargingTariffs           = [];
@@ -118,6 +119,14 @@ namespace cloud.charging.open.chargy
         /// <summary>The charging station operators of this record.</summary>
         public IReadOnlyList<ChargingStationOperator>  ChargingStationOperators
             => chargingStationOperators;
+
+        /// <summary>
+        /// The grid operators of this record: the operators of the grids its
+        /// charging sessions drew power from, which may have constrained it. A
+        /// record may span several grids, so there may be several.
+        /// </summary>
+        public IReadOnlyList<GridOperator>             GridOperators
+            => gridOperators;
 
         /// <summary>Charging pools that are not attached to an operator.</summary>
         public IReadOnlyList<ChargingPool>             ChargingPools
@@ -204,6 +213,16 @@ namespace cloud.charging.open.chargy
         public ChargeTransparencyRecord AddChargingStationOperator(ChargingStationOperator ChargingStationOperator)
         {
             chargingStationOperators.Add(ChargingStationOperator);
+            return this;
+        }
+
+        /// <summary>
+        /// Add a grid operator to this charge transparency record.
+        /// </summary>
+        /// <param name="GridOperator">A grid operator.</param>
+        public ChargeTransparencyRecord AddGridOperator(GridOperator GridOperator)
+        {
+            gridOperators.Add(GridOperator);
             return this;
         }
 
@@ -371,6 +390,11 @@ namespace cloud.charging.open.chargy
                     if (ChargingStationOperator.TryParse(operatorJSON, out var chargingStationOperator))
                         record.AddChargingStationOperator(chargingStationOperator!);
 
+            if (JSON["gridOperators"] is JArray gridOperatorArray)
+                foreach (var gridOperatorJSON in gridOperatorArray.OfType<JObject>())
+                    if (GridOperator.TryParse(gridOperatorJSON, out var gridOperator))
+                        record.AddGridOperator(gridOperator!);
+
             if (JSON["chargingPools"]    is JArray poolArray)
                 foreach (var poolJSON in poolArray.OfType<JObject>())
                     if (ChargingPool.   TryParse(poolJSON,    out var chargingPool))
@@ -439,6 +463,9 @@ namespace cloud.charging.open.chargy
 
             if (chargingStationOperators.Count > 0)
                 json.Add(new JProperty("chargingStationOperators",  new JArray(chargingStationOperators.Select(csOperator       => csOperator.      ToJSON()))));
+
+            if (gridOperators.           Count > 0)
+                json.Add(new JProperty("gridOperators",             new JArray(gridOperators.           Select(gridOperator     => gridOperator.    ToJSON()))));
 
             if (chargingPools.           Count > 0)
                 json.Add(new JProperty("chargingPools",             new JArray(chargingPools.           Select(pool             => pool.            ToJSON()))));

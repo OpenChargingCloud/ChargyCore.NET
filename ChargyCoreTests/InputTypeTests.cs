@@ -157,19 +157,46 @@ namespace cloud.charging.open.chargy.tests
         #endregion
 
 
-        #region A_live_link_needs_its_JSONLD_context()
+        #region A_live_link_needs_its_context_a_creation_time_and_transports()
 
+        /// <summary>
+        /// What makes a document a live link since upstream 0.15.0: its context,
+        /// when it was created, and where its updates can be fetched — the three
+        /// things every one of them has. Nothing optional decides it.
+        /// </summary>
         [Test]
-        public void A_live_link_needs_its_JSONLD_context()
+        public void A_live_link_needs_its_context_a_creation_time_and_transports()
         {
 
-            var withContext = JObject.Parse("""
-                { "@context": "https://open.charging.cloud/contexts/chargeTransparency/live/link/1.0" }
-                """);
+            static JObject Document(String Context, Boolean Created = true, Boolean LiveTransports = true)
+            {
+
+                var json = new JObject(new JProperty("@context", JToken.Parse(Context)));
+
+                if (Created)
+                    json.Add(new JProperty("created",         "2026-08-14T12:00:00.000Z"));
+
+                if (LiveTransports)
+                    json.Add(new JProperty("liveTransports",  new JArray()));
+
+                return json;
+
+            }
+
+            const String context = "\"https://open.charging.cloud/contexts/chargeTransparency/live/link/1.0\"";
 
             Assert.Multiple(() => {
-                Assert.That(ChargeTransparencyLiveLink.TryParse(withContext, out _),                  Is.True);
-                Assert.That(ChargeTransparencyLiveLink.TryParse(JObject.Parse("""{ }"""), out _),     Is.False);
+
+                Assert.That(ChargeTransparencyLiveLink.TryParse(Document(context),                         out _),  Is.True);
+
+                Assert.That(ChargeTransparencyLiveLink.TryParse(Document(context, Created:        false),  out _),  Is.False);
+                Assert.That(ChargeTransparencyLiveLink.TryParse(Document(context, LiveTransports: false),  out _),  Is.False);
+                Assert.That(ChargeTransparencyLiveLink.TryParse(JObject.Parse("""{ }"""),                  out _),  Is.False);
+
+                // A document may name an extension context next to this one.
+                Assert.That(ChargeTransparencyLiveLink.TryParse(Document($"[ \"https://example.com/extension\", {context} ]"),  out _),  Is.True);
+                Assert.That(ChargeTransparencyLiveLink.TryParse(Document( "[ \"https://example.com/extension\" ]"),             out _),  Is.False);
+
             });
 
         }
@@ -190,9 +217,11 @@ namespace cloud.charging.open.chargy.tests
                     "geoLocation": { "lat": 50.9, "lng": 11.6 },
                     "connector":   { "standard": "IEC_62196_T2", "powerType": "AC_3_PHASE" },
                     "liveTransports": [
-                        { "type": "https",     "url": "https://station.example/live", "refresh": 15 },
+                        { "type": "https",     "urls": [ "https://station.example/live" ], "refresh": 15,
+                          "customHeaders": { "X-Key": "abc", "X-TOTP": { "valueProvider": "TOTP", "parameters": { "sharedSecret": "ABC" } } } },
                         { "type": "httpSSE",   "urls": [ "https://station.example/sse", { "url": "https://backup.example/sse", "priority": 10 } ] },
-                        { "type": "websocket", "url": "wss://station.example/ws", "totp": { "initialSharedSecret": "ABC", "timeStep": 30 } }
+                        { "type": "websocket", "urls": [ "wss://station.example/ws" ],
+                          "totp": { "sharedSecret": "ABC", "timeStep": 30, "totpLength": 8, "hashAlgorithm": "SHA-256" } }
                     ]
                 }
                 """);
@@ -211,12 +240,20 @@ namespace cloud.charging.open.chargy.tests
                 Assert.That(link. LiveTransports[0].Refresh,       Is.EqualTo(TimeSpan.FromSeconds(15)));
                 Assert.That(link. LiveTransports[1].Refresh,       Is.Null);
 
+                // A literal header is sent as it is; a provider computes its value.
+                Assert.That(link. LiveTransports[0].CustomHeaders["X-Key"].Literal,         Is.EqualTo("abc"));
+                Assert.That(link. LiveTransports[0].CustomHeaders["X-TOTP"].ValueProvider,  Is.EqualTo("TOTP"));
+
                 // A bare URL string and an object with a priority are both endpoints.
                 Assert.That(link. LiveTransports[1].URLs,          Has.Count.EqualTo(2));
                 Assert.That(link. LiveTransports[1].URLs[0].URL,   Is.EqualTo("https://station.example/sse"));
                 Assert.That(link. LiveTransports[1].URLs[1].Priority,  Is.EqualTo(10));
 
-                Assert.That(link. LiveTransports[2].TOTP?.TimeStep,    Is.EqualTo(30));
+                Assert.That(link. LiveTransports[2].TOTP?.SharedSecret,   Is.EqualTo("ABC"));
+                Assert.That(link. LiveTransports[2].TOTP?.TimeStep,       Is.EqualTo(30));
+                Assert.That(link. LiveTransports[2].TOTP?.TOTPLength,     Is.EqualTo(8));
+                Assert.That(link. LiveTransports[2].TOTP?.HashAlgorithm,  Is.EqualTo("SHA-256"));
+
                 Assert.That(link. Connector?.Standard,                 Is.EqualTo("IEC_62196_T2"));
                 Assert.That(link. GeoLocation?.Latitude.Value,         Is.EqualTo(50.9));
 
@@ -226,22 +263,30 @@ namespace cloud.charging.open.chargy.tests
 
         #endregion
 
-        #region An_unreadable_transport_rejects_the_whole_live_link()
+        #region An_unreadable_transport_is_dropped_and_the_live_link_kept()
 
         [Test]
-        public void An_unreadable_transport_rejects_the_whole_live_link()
+        public void An_unreadable_transport_is_dropped_and_the_live_link_kept()
         {
 
-            // A link that cannot be trusted to describe how to reach the station
-            // is worse than no link at all.
+            // Upstream 0.15.0: a broken transport must not turn the document
+            // into an unrecognised one that then fails as an "unknown format".
+            // It is dropped where the transports are read, and the others stay.
             var json = JObject.Parse("""
                 {
                     "@context":       "https://open.charging.cloud/contexts/chargeTransparency/live/link/1.0",
-                    "liveTransports": [ { "type": "carrier-pigeon", "url": "https://station.example/live" } ]
+                    "created":        "2026-08-14T12:00:00.000Z",
+                    "liveTransports": [
+                        { "type": "carrier-pigeon", "urls": [ "https://station.example/live" ] },
+                        { "type": "https",          "urls": [ "https://station.example/live" ], "refresh": "often" },
+                        { "type": "https",          "urls": [ "https://station.example/live" ], "customHeaders": { "X-Key": 42 } },
+                        { "type": "https",          "urls": [ "https://station.example/live" ] }
+                    ]
                 }
                 """);
 
-            Assert.That(ChargeTransparencyLiveLink.TryParse(json, out _),  Is.False);
+            Assert.That(ChargeTransparencyLiveLink.TryParse(json, out var link),  Is.True);
+            Assert.That(link!.LiveTransports,                                     Has.Count.EqualTo(1));
 
         }
 
@@ -253,24 +298,40 @@ namespace cloud.charging.open.chargy.tests
         public void The_old_property_names_are_read_by_nobody()
         {
 
-            // Upstream 0.13.0 renamed "timestamp" to "created" and "transports"
-            // to "liveTransports", deliberately without a fallback. Both are
-            // optional, so a document still using the old names is a live link —
-            // it simply says nothing this reader looks at, right down to a
-            // transport that would have been rejected under the new name.
-            var json = JObject.Parse("""
+            // Upstream renamed "timestamp" to "created" and "transports" to
+            // "liveTransports" in 0.13.0, "initialSharedSecret" to "sharedSecret"
+            // and the endpoints into "urls" alone in 0.15.0 — every time without
+            // a fallback. Since the first two are required now, a document still
+            // using the old names is not a live link at all.
+            var oldNames = JObject.Parse("""
                 {
                     "@context":   "https://open.charging.cloud/contexts/chargeTransparency/live/link/1.0",
                     "timestamp":  "2026-08-14T12:00:00.000Z",
-                    "transports": [ { "type": "carrier-pigeon", "url": "https://station.example/live" } ]
+                    "transports": [ { "type": "https", "urls": [ "https://station.example/live" ] } ]
                 }
                 """);
 
-            Assert.That(ChargeTransparencyLiveLink.TryParse(json, out var link),  Is.True);
+            // A transport with the old TOTP spelling is dropped, and one naming
+            // its endpoint in "url" names nothing this reader looks at.
+            var oldTransports = JObject.Parse("""
+                {
+                    "@context":       "https://open.charging.cloud/contexts/chargeTransparency/live/link/1.0",
+                    "created":        "2026-08-14T12:00:00.000Z",
+                    "liveTransports": [
+                        { "type": "websocket", "urls": [ "wss://station.example/ws" ], "totp": { "initialSharedSecret": "ABC", "timeStep": 30 } },
+                        { "type": "https",     "url":  "https://station.example/live" }
+                    ]
+                }
+                """);
+
+            Assert.That(ChargeTransparencyLiveLink.TryParse(oldNames,      out _),     Is.False);
+            Assert.That(ChargeTransparencyLiveLink.TryParse(oldTransports, out var link),  Is.True);
 
             Assert.Multiple(() => {
-                Assert.That(link!.Created,         Is.Null);
-                Assert.That(link. LiveTransports,  Is.Empty);
+                Assert.That(link!.LiveTransports,          Has.Count.EqualTo(1));
+                Assert.That(link. LiveTransports[0].Type,  Is.EqualTo(TransportType.HTTPS));
+                Assert.That(link. LiveTransports[0].URL,   Is.Null);
+                Assert.That(link. LiveTransports[0].URLs,  Is.Empty);
             });
 
         }

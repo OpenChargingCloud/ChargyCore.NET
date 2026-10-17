@@ -187,6 +187,45 @@ namespace cloud.charging.open.chargy.Formats.OCMF
 
         #endregion
 
+        #region (static) ParseList(TariffText)
+
+        /// <summary>
+        /// The separator between the tariffs of a "TT" field that records a tariff
+        /// change.
+        ///
+        /// A vertical bar also separates the three parts of the OCMF envelope, but
+        /// "TT" lives inside the JSON payload, which is read by tracking the brace
+        /// depth rather than by splitting on bars, so a bar inside this field
+        /// arrives intact.
+        /// </summary>
+        public const Char Separator = '|';
+
+        /// <summary>
+        /// The tariffs of one "TT" field, in the order they took effect.
+        ///
+        /// The Bonner Eichrechtstage define a tariff text for one tariff, which is
+        /// all a document needs as long as the tariff does not change. It can —
+        /// OCMF has a reading reason for exactly that, TX "T" — and upstream
+        /// a02c7a0 extends the format for the case: the tariffs that have been in
+        /// effect so far, separated by a vertical bar and in chronological order.
+        ///
+        ///     001;EUR;0;35;0;0
+        ///     001;EUR;0;35;0;0|001;EUR;0;25;0;0
+        ///     001;EUR;0;35;0;0|001;EUR;0;25;0;0|001;EUR;0;35;0;0
+        ///
+        /// The list only grows, so the last entry is the tariff in effect at the
+        /// last reading of the document and the ones before it are the history. A
+        /// tariff that comes back is written again: the entries are tariff periods,
+        /// not distinct tariffs. A field naming a single tariff is a list of one.
+        /// </summary>
+        /// <param name="TariffText">An OCMF "TT" value.</param>
+        /// <exception cref="OCMFBonnTariffParseException">When any of the entries is not a Bonn tariff text.</exception>
+        public static IReadOnlyList<OCMFBonnTariff> ParseList(String TariffText)
+
+            => [ .. TariffText.Split(Separator).Select(Parse) ];
+
+        #endregion
+
         #region (private, static) ParseCents(Value, TariffText, FieldName)
 
         /// <summary>

@@ -21,6 +21,8 @@ using System.Buffers.Text;
 
 using Newtonsoft.Json.Linq;
 
+using Org.BouncyCastle.Asn1;
+using Org.BouncyCastle.Asn1.EdEC;
 using Org.BouncyCastle.Asn1.X509;
 using Org.BouncyCastle.Asn1.X9;
 using Org.BouncyCastle.Crypto.Parameters;
@@ -414,6 +416,44 @@ namespace cloud.charging.open.chargy.Crypto
                                        );
 
             return new (Value, Pipeline, Algorithm, Convert.ToHexString(subjectPublicKeyInfo.GetDerEncoded()));
+
+        }
+
+        #endregion
+
+        #region (internal, static) SubjectPublicKeyInfoOf(RawKey, Algorithm)
+
+        /// <summary>
+        /// The DER SubjectPublicKeyInfo of a key stored as its bare key material,
+        /// or null when the stated algorithm names nothing that has one here.
+        ///
+        /// A key id is defined over the SubjectPublicKeyInfo whatever form a
+        /// document stores the key in, so a raw key — as Ed25519 keys usually
+        /// are — has to be wrapped before its id can be computed. The algorithm
+        /// says what to wrap it with, which is why a document states it next to
+        /// every key.
+        /// </summary>
+        /// <param name="RawKey">The bare key material: a SEC1 point, or the raw octets of an EdDSA or ML-DSA key.</param>
+        /// <param name="Algorithm">The key type the document states, e.g. "EdDSA-Ed25519".</param>
+        internal static Byte[]? SubjectPublicKeyInfoOf(Byte[]   RawKey,
+                                                       String?  Algorithm)
+        {
+
+            var algorithmOID = Algorithm switch {
+                                   "EdDSA-Ed25519"  => EdECObjectIdentifiers.id_Ed25519,
+                                   "EdDSA-Ed448"    => EdECObjectIdentifiers.id_Ed448,
+                                   "ML-DSA-44"      => new DerObjectIdentifier("2.16.840.1.101.3.4.3.17"),
+                                   "ML-DSA-65"      => new DerObjectIdentifier("2.16.840.1.101.3.4.3.18"),
+                                   "ML-DSA-87"      => new DerObjectIdentifier("2.16.840.1.101.3.4.3.19"),
+                                   _                => null
+                               };
+
+            if (algorithmOID is not null)
+                return new SubjectPublicKeyInfo(new AlgorithmIdentifier(algorithmOID), RawKey).GetDerEncoded();
+
+            return FromECPoint("", [], Algorithm, RawKey).KeyHEX is String subjectPublicKeyInfo
+                       ? Convert.FromHexString(subjectPublicKeyInfo)
+                       : null;
 
         }
 

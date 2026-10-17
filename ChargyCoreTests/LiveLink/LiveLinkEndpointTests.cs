@@ -303,6 +303,38 @@ namespace cloud.charging.open.chargy.tests.LiveLink
 
         #endregion
 
+
+        #region OnlyWellFormedLiteralHeadersAreSent()
+
+        /// <summary>
+        /// A document says what it wants sent; it does not get to write the
+        /// request. A name that is not an HTTP token, a value with a line break in
+        /// it, and the fields the request machinery owns are left out.
+        /// </summary>
+        [Test]
+        public void OnlyWellFormedLiteralHeadersAreSent()
+        {
+
+            var transport = new Transport(
+                                TransportType.HTTPS,
+                                "https://api1.example.com/live",
+                                CustomHeaders: [
+                                    new ("X-API-Key",        CustomHeaderValue.FromLiteral ("abc123")),
+                                    new ("X-Provided",       CustomHeaderValue.FromProvider("TOTP")),
+                                    new ("X-Injected",       CustomHeaderValue.FromLiteral ("a\r\nX-Evil: 1")),
+                                    new ("Not a token",      CustomHeaderValue.FromLiteral ("x")),
+                                    new ("Content-Length",   CustomHeaderValue.FromLiteral ("0")),
+                                    new ("sec-websocket-key", CustomHeaderValue.FromLiteral ("x"))
+                                ]
+                            );
+
+            Assert.That(LiveLinkEndpoints.LiteralHeaders(transport).Select(header => header.Key),
+                        Is.EqualTo(new[] { "X-API-Key" }));
+
+        }
+
+        #endregion
+
     }
 
 }

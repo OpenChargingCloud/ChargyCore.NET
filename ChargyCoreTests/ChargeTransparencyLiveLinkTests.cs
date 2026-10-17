@@ -88,26 +88,33 @@ namespace cloud.charging.open.chargy.tests
                 otherContext["@context"] = "https://example.com/other";
                 Assert.That(ChargeTransparencyLiveLink.IsAChargeTransparencyLiveLink(otherContext),  Is.False);
 
-                // A transport Chargy cannot speak makes the link useless as a
-                // whole: it claims to say how to reach the station and the answer
-                // is one nobody can follow. Accepting the document and quietly
-                // dropping that transport would leave an application believing it
-                // had been told everything.
+                // A transport Chargy cannot speak does not cost the document its
+                // recognition (upstream 0.15.0): it is dropped where the
+                // transports are read, and the others stay usable.
                 var unknownTransport = (JObject) liveLink.DeepClone();
-                unknownTransport["liveTransports"] = new JArray(
-                                                         new JObject(
-                                                             new JProperty("type",  "ftp"),
-                                                             new JProperty("url",   "https://example.com")
-                                                         )
-                                                     );
-                Assert.That(ChargeTransparencyLiveLink.IsAChargeTransparencyLiveLink(unknownTransport),  Is.False);
+                ((JArray) unknownTransport["liveTransports"]!).Add(
+                    new JObject(
+                        new JProperty("type",  "ftp"),
+                        new JProperty("urls",  new JArray("https://example.com"))
+                    )
+                );
+                Assert.That(ChargeTransparencyLiveLink.TryParse(unknownTransport, out var withUnknownTransport),  Is.True);
+                Assert.That(withUnknownTransport!.LiveTransports,                                                  Has.Count.EqualTo(3));
 
                 // A refresh period is a number of seconds, and on https it is
-                // read rather than ignored — so a value that is not a number
-                // makes the document unusable like any other malformed field.
+                // read rather than ignored — so a transport stating something else
+                // is not one, and is dropped like any other.
                 var textualRefresh = (JObject) liveLink.DeepClone();
                 textualRefresh["liveTransports"]![0]!["refresh"] = "often";
-                Assert.That(ChargeTransparencyLiveLink.IsAChargeTransparencyLiveLink(textualRefresh),  Is.False);
+                Assert.That(ChargeTransparencyLiveLink.TryParse(textualRefresh, out var withTextualRefresh),  Is.True);
+                Assert.That(withTextualRefresh!.LiveTransports.Select(transport => transport.Type),
+                            Has.No.Member(TransportType.HTTPS));
+
+                // What every live link has decides it: without a creation time
+                // a document is not one.
+                var notCreated = (JObject) liveLink.DeepClone();
+                notCreated.Remove("created");
+                Assert.That(ChargeTransparencyLiveLink.IsAChargeTransparencyLiveLink(notCreated),  Is.False);
 
                 Assert.That(ChargeTransparencyLiveLink.IsAChargeTransparencyLiveLink([]),  Is.False);
 
@@ -141,7 +148,9 @@ namespace cloud.charging.open.chargy.tests
 
             Assert.Multiple(() => {
 
-                Assert.That(liveLink.Created,                        Is.EqualTo("2026-08-28T11:59:59Z"));
+                // What the document states, whenever the series was generated:
+                // reading neither fills it in nor replaces it.
+                Assert.That(liveLink.Created,                        Is.EqualTo(ChargyLib.ParseJSON(ReadTextFixture(CompletedSession))["created"]!.Value<String>()));
                 Assert.That(liveLink.Description?[Languages.de],     Is.EqualTo("OCMF-Test-01 Transparenz Live-Link"));
 
                 // Upstream 3a2d3ad moved the position and the connector onto the
@@ -157,12 +166,18 @@ namespace cloud.charging.open.chargy.tests
 
                 Assert.That(liveLink.LiveTransports,                 Has.Count.EqualTo(3));
 
-                #region One URL, no one-time password, and how often to ask again
+                #region One URL, no one-time password, custom headers, and how often to ask again
 
                 Assert.That(liveLink.LiveTransports[0].Type,             Is.EqualTo(TransportType.HTTPS));
-                Assert.That(liveLink.LiveTransports[0].URL,              Is.EqualTo("https://api1.example.com/chargingSessions/OCMF-Test-01/transparency/live?token=abcdef"));
-                Assert.That(liveLink.LiveTransports[0].URLs,             Is.Empty);
+                Assert.That(liveLink.LiveTransports[0].URL,              Is.Null);
+                Assert.That(liveLink.LiveTransports[0].URLs.Select(url => url.URL),
+                            Is.EqualTo(new[] { "https://api1.example.com/chargingSessions/OCMF-Test-01/transparency/live?token=abcdef" }));
                 Assert.That(liveLink.LiveTransports[0].TOTP,             Is.Null);
+
+                // A literal header and one whose value a provider computes per
+                // request; the format names the provider and computes nothing.
+                Assert.That(liveLink.LiveTransports[0].CustomHeaders["X-Key1"].Literal,         Is.EqualTo("headerValue1"));
+                Assert.That(liveLink.LiveTransports[0].CustomHeaders["X-TOTP"].ValueProvider,   Is.EqualTo("TOTP"));
 
                 // Ten seconds, which is the interval at which this station's
                 // meter takes a reading.
@@ -179,7 +194,7 @@ namespace cloud.charging.open.chargy.tests
                 Assert.That(liveLink.LiveTransports[1].URLs[0].Weight,   Is.EqualTo(60));
                 Assert.That(liveLink.LiveTransports[1].URLs[1].Weight,   Is.EqualTo(40));
 
-                Assert.That(liveLink.LiveTransports[1].TOTP?.InitialSharedSecret,  Is.EqualTo("abcdefghijklmnopqrstuvwxyz1234567890"));
+                Assert.That(liveLink.LiveTransports[1].TOTP?.SharedSecret,  Is.EqualTo("abcdefghijklmnopqrstuvwxyz1234567890"));
                 Assert.That(liveLink.LiveTransports[1].TOTP?.TimeStep,             Is.EqualTo(10));
 
                 // Only https says how often to ask again. On a transport that
@@ -225,7 +240,8 @@ namespace cloud.charging.open.chargy.tests
 
                 Assert.That(withoutMeterValues,  Is.InstanceOf<ChargeTransparencyLiveLink>(), VerificationReport.Format(withoutMeterValues));
 
-                Assert.That(((ChargeTransparencyLiveLink) withoutMeterValues).Created,         Is.EqualTo("2026-08-28T11:59:59Z"));
+                Assert.That(((ChargeTransparencyLiveLink) withoutMeterValues).Created,
+                            Is.EqualTo(ChargyLib.ParseJSON(ReadTextFixture(NothingMeasuredYet))["created"]!.Value<String>()));
                 Assert.That(((ChargeTransparencyLiveLink) withoutMeterValues).LiveTransports,  Has.Count.EqualTo(3));
 
             });
@@ -242,15 +258,22 @@ namespace cloud.charging.open.chargy.tests
         ///
         /// This is the case a single public key cannot serve: the meter signs the
         /// start and the end value of the session, the operator signs the
-        /// nineteen readings in between, and every one of them has to verify. So
-        /// each document is tried against every key the document names for that
+        /// readings in between, and every one of them has to verify. So each
+        /// document is tried against every key the document names for that
         /// purpose, and keeps the first signature that holds.
+        ///
+        /// The tariff changes twice during the session, and the readings under
+        /// every tariff belong to it: before upstream a02c7a0 a tariff change
+        /// split the session in two and lost the readings after it.
         /// </summary>
         [Test]
         public void TheSignedMeterValuesBecomeAVerifiedRecord()
         {
 
-            Assert.That(ChargeTransparencyLiveLink.TryParse(ChargyLib.ParseJSON(ReadTextFixture(CompletedSession)), out var liveLink), Is.True);
+            var json       = ChargyLib.ParseJSON(ReadTextFixture(CompletedSession));
+            var documents  = json["signedMeterValues"]!["values"]!.Count();
+
+            Assert.That(ChargeTransparencyLiveLink.TryParse(json, out var liveLink), Is.True);
 
             var record = Detector().TryToParseLiveLinkMeterValues(liveLink!);
 
@@ -266,10 +289,12 @@ namespace cloud.charging.open.chargy.tests
 
                 var measurement = chargingSession.Measurements[0];
 
-                // 19 OCMF documents, but the last one repeats the start value
-                // next to the end value.
+                // One reading per OCMF document, and the last one repeats the
+                // start value next to the end value. Counted rather than named,
+                // because the series is regenerated whenever its generator learns
+                // something new.
                 Assert.That(measurement.Name,               Is.EqualTo("ENERGY_TOTAL"));
-                Assert.That(measurement.Values,             Has.Count.EqualTo(20));
+                Assert.That(measurement.Values,             Has.Count.EqualTo(documents + 1));
 
                 // The live link carries the public keys, so unlike a bare OCMF
                 // file every one of these readings can actually be verified.
@@ -290,10 +315,10 @@ namespace cloud.charging.open.chargy.tests
         /// than against one: neither key of this session verifies all of it.
         ///
         /// The energy meter signs the start value and the end value, the operator
-        /// signs the seventeen readings in between. Either key alone leaves most
-        /// of the session unverified, and a reader that took only the first key
-        /// it found would report exactly that to an EV driver whose session is
-        /// entirely sound.
+        /// signs the readings in between. Either key alone leaves part of the
+        /// session unverified, and a reader that took only the first key it found
+        /// would report exactly that to an EV driver whose session is entirely
+        /// sound.
         /// </summary>
         [Test]
         public void NoSingleKeyVerifiesTheWholeSession()
@@ -310,13 +335,22 @@ namespace cloud.charging.open.chargy.tests
 
             var meterKey     = json["chargingStation"]!["EVSE"]!["energyMeter"]!["publicKeys"]![0]!["value"]!.Value<String>()!;
 
+            // One reading per document, and the end document repeats the start.
+            var readings = documents.Length + 1;
+
             Assert.Multiple(() => {
-                Assert.That(ValidReadings([ operatorKey ]),             Is.EqualTo(17));
-                Assert.That(ValidReadings([ meterKey    ]),             Is.EqualTo(3));
-                Assert.That(ValidReadings([ operatorKey, meterKey ]),   Is.EqualTo(20));
+
+                var byOperator = ValidReadings([ operatorKey ]);
+                var byMeter    = ValidReadings([ meterKey    ]);
+
+                // The meter's start and end value, and the rest by the operator.
+                Assert.That(byMeter,                                    Is.EqualTo(3));
+                Assert.That(byOperator,                                 Is.EqualTo(readings - byMeter));
+                Assert.That(ValidReadings([ operatorKey, meterKey ]),   Is.EqualTo(readings));
 
                 // The order the keys are offered in must not decide the outcome.
-                Assert.That(ValidReadings([ meterKey,    operatorKey ]),   Is.EqualTo(20));
+                Assert.That(ValidReadings([ meterKey,    operatorKey ]),   Is.EqualTo(readings));
+
             });
 
             Int32 ValidReadings(String[] PublicKeys)
@@ -380,53 +414,39 @@ namespace cloud.charging.open.chargy.tests
 
         #endregion
 
-        #region ALiveLinkWithoutATimestampIsStampedOnArrival()
+        #region ALiveLinkWithoutATimestampIsNotOne()
 
         /// <summary>
-        /// A live link that does not say when it was created is stamped when it
-        /// is read.
+        /// A document that does not say when it was created is not a live link,
+        /// and reading it stamps nothing.
         ///
-        /// Live data is only worth anything if its age is known, and a sticker on
-        /// a charging station carries no clock. The moment it was read is the
-        /// earliest thing anyone can honestly say about it.
+        /// This reader used to stamp such a document with the moment it was read.
+        /// Upstream 0.15.0 stopped that: in a legally relevant document "created"
+        /// means when it was created, and reading is not creating. A live link
+        /// states its own timestamp, and one that does not is something else.
         /// </summary>
         [Test]
-        public async Task ALiveLinkWithoutATimestampIsStampedOnArrival()
+        public async Task ALiveLinkWithoutATimestampIsNotOne()
         {
 
-            var before  = DateTimeOffset.UtcNow.AddSeconds(-1);
-            var result  = await VerifyFixtures([ "ChargeTransparencyLive/ChargeTransparencyLiveLink_2.json" ]);
-            var after   = DateTimeOffset.UtcNow.AddSeconds(1);
+            var json = ChargyLib.ParseJSON(ReadTextFixture("ChargeTransparencyLive/ChargeTransparencyLiveLink_2.json"));
 
-            Assert.That(result, Is.InstanceOf<ChargeTransparencyLiveLink>(), VerificationReport.Format(result));
+            Assert.That(ChargeTransparencyLiveLink.IsAChargeTransparencyLiveLink(json),  Is.True);
 
-            var created = ((ChargeTransparencyLiveLink) result).Created;
+            json.Remove("created");
 
-            Assert.That(created, Is.Not.Null);
+            var result = await Verify([
+                             new FileInfo(
+                                 "notCreated.json",
+                                 System.Text.Encoding.UTF8.GetBytes(json.ToString()),
+                                 "application/json"
+                             )
+                         ]);
 
             Assert.Multiple(() => {
-
-                // Written the way the rest of Chargy writes an instant, so that a
-                // stamped link and a signed one can be compared without knowing
-                // which is which.
-                Assert.That(
-                    DateTimeOffset.TryParseExact(
-                        created,
-                        "yyyy-MM-dd'T'HH:mm:ss.fff'Z'",
-                        CultureInfo.InvariantCulture,
-                        DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal,
-                        out var parsed
-                    ),
-                    Is.True,
-                    $"'{created}' is not an ISO 8601 UTC timestamp"
-                );
-
-                Assert.That(parsed, Is.InRange(before, after));
-
-                // The stamp reaches the document as well, not only the property:
-                // it is what a caller storing the link will read back later.
-                Assert.That(((ChargeTransparencyLiveLink) result).ToJSON()["created"]?.Value<String>(),  Is.EqualTo(created));
-
+                Assert.That(ChargeTransparencyLiveLink.IsAChargeTransparencyLiveLink(json),  Is.False);
+                Assert.That(result,                                                          Is.Not.InstanceOf<ChargeTransparencyLiveLink>(), VerificationReport.Format(result));
+                Assert.That(json["created"],                                                 Is.Null);
             });
 
         }

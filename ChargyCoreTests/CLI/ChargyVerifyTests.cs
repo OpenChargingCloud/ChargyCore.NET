@@ -156,12 +156,19 @@ namespace cloud.charging.open.chargy.tests.CLI
         ///
         /// Those readings are in the file. Reading them costs no network request
         /// and tells nobody's operator anything, so a report that said "nothing
-        /// here has been verified" while the document held twenty valid
+        /// here has been verified" while the document held dozens of valid
         /// signatures would simply be untrue.
+        ///
+        /// The document is signed as a whole as well, by two keys of the
+        /// operator, and the report says so next to the addresses.
         /// </summary>
         [Test]
         public async Task ALiveLinkIsReportedWithTheReadingsItCarries()
         {
+
+            // One reading per OCMF document, and the last one repeats the start.
+            var readings = ChargyLib.ParseJSON(ReadTextFixture("ChargeTransparencyLive/ChargeTransparencyLiveLink_1.json"))
+                               ["signedMeterValues"]!["values"]!.Count() + 1;
 
             var exitCode = await Run(FixturePath("ChargeTransparencyLive/ChargeTransparencyLiveLink_1.json"));
 
@@ -172,8 +179,11 @@ namespace cloud.charging.open.chargy.tests.CLI
                 Assert.That(Printed,   Does.Contain("A charge transparency live link."));
                 Assert.That(Printed,   Does.Contain("asks again every 10 seconds"));
 
+                Assert.That(Printed,   Does.Contain("signed:     2 of 2 signature(s) valid"));
+                Assert.That(Printed,   Does.Not.Contain("Warning:"));
+
                 Assert.That(Printed,   Does.Contain("Charging session 1: verified"));
-                Assert.That(Printed,   Does.Contain("ENERGY_TOTAL: 20 reading(s), 20 with a valid signature"));
+                Assert.That(Printed,   Does.Contain($"ENERGY_TOTAL: {readings} reading(s), {readings} with a valid signature"));
 
             });
 

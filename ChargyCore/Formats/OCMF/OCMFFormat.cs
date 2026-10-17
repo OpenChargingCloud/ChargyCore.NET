@@ -242,7 +242,15 @@ namespace cloud.charging.open.chargy.Formats.OCMF
                               Text(payload, "IL") ?? "",
                               Text(payload, "IT") ?? "",
                               Text(payload, "ID") ?? "",
-                              Text(payload, "TT") ?? "",
+                              // "TT" is deliberately not part of this key. A
+                              // tariff may change during a charging session —
+                              // OCMF has a reading reason of its own for it, TX
+                              // "T" — and the documents before and after such a
+                              // change are one session, not two. Grouping by
+                              // "TT" split them, and since only the first group
+                              // is returned, every reading metered under a later
+                              // tariff was dropped without a word (upstream
+                              // a02c7a0).
                               Text(payload, "CF") ?? "",
                               Text(payload, "CT") ?? "",
                               Text(payload, "CI") ?? ""

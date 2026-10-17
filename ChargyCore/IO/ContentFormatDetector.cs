@@ -313,6 +313,93 @@ namespace cloud.charging.open.chargy.IO
 
         #endregion
 
+        #region (private) VerifyLiveLinkSignatures(LiveLink)
+
+        /// <summary>
+        /// Verify the signatures over a whole live link, and those its legally
+        /// relevant log messages carry over themselves.
+        ///
+        /// A live link may be signed as a whole by its operator, which is what
+        /// ties the transport URLs and the listed public keys to whoever signed
+        /// them. A log message — a grid operator's power constraint, say — is
+        /// signed by whoever sent it. The two prove different things: the
+        /// document signature says the message has not been changed since the
+        /// operator collected it, the message signature says the grid operator is
+        /// who asked for the constraint.
+        ///
+        /// Nothing here rejects a document. An unsigned live link, an unknown key
+        /// or even a signature that does not match is a warning, and the document
+        /// stays usable: its transports still work, and its signed meter values
+        /// carry their own signatures. The warnings are graded by what they say —
+        /// that nothing was claimed, that the claim cannot be judged here, or that
+        /// it is demonstrably false — and each is said once, however many
+        /// signatures fail the same way.
+        /// </summary>
+        /// <param name="LiveLink">A live link, read from a document.</param>
+        private void VerifyLiveLinkSignatures(ChargeTransparencyLiveLink LiveLink)
+        {
+
+            if (LiveLink.OriginalJSON is not JObject document)
+                return;
+
+            var reported = new HashSet<String>(StringComparer.Ordinal);
+
+            void Warn(String MessageKey, SeverityLevel Level)
+            {
+                if (reported.Add(MessageKey))
+                    LiveLink.AddWarning(new Warning(I18N.GetMultilanguageText(MessageKey), Level));
+            }
+
+            void Grade(DocumentSignaturesResult Result, String Prefix)
+            {
+
+                if (Result.Status == DocumentSignaturesStatus.Unsigned)
+                    // Nothing is claimed here, so nothing is broken — but a reader
+                    // who expects a signed document should be able to tell.
+                    Warn($"{Prefix}_Missing", SeverityLevel.Low);
+
+                foreach (var signature in Result.Signatures)
+                    switch (signature.Status)
+                    {
+
+                        // A signature that demonstrably does not match is the one
+                        // case that says something is actually wrong.
+                        case DocumentSignatureStatus.InvalidSignature:
+                            Warn($"{Prefix}_Mismatch",             SeverityLevel.High);
+                            break;
+
+                        // The rest mean "cannot be judged here", which is a weaker
+                        // statement than "is wrong".
+                        case DocumentSignatureStatus.UnknownPublicKey:
+                            Warn($"{Prefix}_UnknownPublicKey",     SeverityLevel.Medium);
+                            break;
+
+                        case DocumentSignatureStatus.UnsupportedAlgorithm:
+                            Warn($"{Prefix}_UnsupportedAlgorithm", SeverityLevel.Medium);
+                            break;
+
+                        case DocumentSignatureStatus.Malformed:
+                            Warn($"{Prefix}_Malformed",            SeverityLevel.Medium);
+                            break;
+
+                    }
+
+            }
+
+            var result = DocumentSignatures.VerifyDocumentSignatures(document);
+
+            Grade(result, "DocumentSignature");
+
+            if (document["legallyRelevantLogMessages"] is JArray logMessages)
+                foreach (var logMessage in logMessages.OfType<JObject>())
+                    Grade(DocumentSignatures.VerifyEmbeddedSignatures(logMessage, document), "LogMessageSignature");
+
+            LiveLink.SignatureVerification = result;
+
+        }
+
+        #endregion
+
         #region (private) ReportUnusableKeys(Record, UnusableKeys)
 
         /// <summary>
@@ -913,20 +1000,14 @@ namespace cloud.charging.open.chargy.IO
 
             #region A charge transparency live link
 
-            if (ChargeTransparencyLiveLink.IsAChargeTransparencyLiveLink(json))
+            // A live link states when it was created, or it is not one: reading a
+            // document no longer stamps it, because that recorded when it was
+            // read (upstream 0.15.0).
+            if (ChargeTransparencyLiveLink.TryParse(json, out var liveLink) &&
+                liveLink is not null)
             {
-
-                // A live link without a creation timestamp is stamped on arrival,
-                // so that an application can tell how old the information it
-                // shows is.
-                json["created"] ??= DateTimeOffset.UtcNow.ToString("yyyy-MM-ddTHH:mm:ss.fffZ");
-
-                if (ChargeTransparencyLiveLink.TryParse(json, out var liveLink) &&
-                    liveLink is not null)
-                {
-                    return liveLink;
-                }
-
+                VerifyLiveLinkSignatures(liveLink);
+                return liveLink;
             }
 
             #endregion
@@ -1279,6 +1360,9 @@ namespace cloud.charging.open.chargy.IO
                         {
 
                             foreach (var chargingStationOperator in record.ChargingStationOperators)  merged.AddChargingStationOperator(chargingStationOperator);
+                            // Forgetting these here is how upstream lost a party
+                            // in every merge until a02c7a0.
+                            foreach (var gridOperator            in record.GridOperators)             merged.AddGridOperator           (gridOperator);
                             foreach (var chargingPool            in record.ChargingPools)             merged.AddChargingPool           (chargingPool);
                             foreach (var chargingStation         in record.ChargingStations)          merged.AddChargingStation        (chargingStation);
                             foreach (var chargingTariff          in record.ChargingTariffs)           merged.AddChargingTariff         (chargingTariff);

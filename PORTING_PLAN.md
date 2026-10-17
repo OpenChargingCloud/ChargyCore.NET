@@ -22,7 +22,7 @@ Source inventory of ChargyCore.TS:
 | Data model & helpers | `interfaces/*`, `ACrypt`, `SignatureCrypto`, `OCPI` | ~4,900 |
 | **Total source** | 34 files | **~23,600** |
 | Tests | 28 spec files | ~4,300 |
-| Test fixtures | 236 files, of which **25 are `*.expected.txt` golden reports** | — |
+| Test fixtures | 256 files, of which **25 are `*.expected.txt` golden reports** | — |
 
 Expected C# size: roughly 28,000–35,000 LOC, because the C# data model uses the
 GraphDefined house style (`ToJSON()` / `TryParse()` per class) instead of bare
@@ -145,7 +145,7 @@ ChargyCore.NET/
     ├── Formats/                        one test class per format
     ├── Containers/
     ├── Crypto/
-    └── TestData/                       all 236 fixtures copied 1:1
+    └── TestData/                       all 256 fixtures copied 1:1
 ```
 
 **Namespace / assembly:** `cloud.charging.open.chargy` (+ `.DataStructures`, `.Crypto`,
@@ -335,7 +335,7 @@ as a hard, automatically-checked contract — not a hope.
 
 * NUnit 4.6.1 + NUnit3TestAdapter 6.2.0 + Microsoft.NET.Test.Sdk 18.8.1 (identical to StyxTests)
 * `<Using Include="NUnit.Framework" />`
-* All 236 fixtures under `TestData/`, `CopyToOutputDirectory="PreserveNewest"`
+* All 256 fixtures under `TestData/`, `CopyToOutputDirectory="PreserveNewest"`
 * One `[TestFixture]` per TS spec file, ~151 test cases total:
 
 | TS spec | NUnit fixture | cases |
@@ -381,14 +381,14 @@ Git repo, AGPL `LICENSE`, `README.md`, `SECURITY.md`, `CONTRIBUTING.md`,
 `ChargyCore.slnx` + both `.csproj` files with the Hermod/Styx project references,
 `i18n.json` + `validationRules.json` as embedded resources, all fixtures copied
 into `ChargyCoreTests/TestData/` — 203 of them at the time, 204 since the v0.12.0
-sync in `f3bab3c`, and 236 since v0.13.0 brought the OCMF-Test-01 live link series
-(see §7b).
+sync in `f3bab3c`, 236 since v0.13.0 brought the OCMF-Test-01 live link series, and
+256 since v0.16.1 regenerated it (see §7b).
 
 Two additions over the original plan:
 
 * `ChargyResources` and `AChargyTests` were written already, so Phase 0 could ship
   **8 scaffolding tests** instead of an empty test run. They assert that the embedded
-  resources parse, that all 236 fixtures and all 25 golden reports reach the output
+  resources parse, that all the fixtures and all 25 golden reports reach the output
   directory, that binary fixtures survive byte-exactly (ZIP magic intact) and that the
   golden reports carry no CRLF. An empty green test run would have proven nothing.
 * `.gitattributes` marks `ChargyCoreTests/TestData/**` as `-text`. End-of-line
@@ -401,7 +401,7 @@ Two additions over the original plan:
 > Note: `TestData/dataStructures.ts` and `TestData/OCMF/versionTestData.ts` are
 > TypeScript *test data definitions*, not charge transparency fixtures. They are kept
 > as the reference for the C# table-driven fixtures written in Phase 1 and Phase 4,
-> and are part of the 236 files asserted above. `versionTestData.ts` is now mirrored
+> and are part of the fixture set asserted above. `versionTestData.ts` is now mirrored
 > by `ChargyCoreTests/Formats/OCMFVersionTestData.cs`, whose seeded generator is the
 > same one bit for bit — so both implementations are fed the same generated documents.
 
@@ -673,7 +673,9 @@ would send an application off to fetch data through a document nobody could read
 transport Chargy cannot speak rejects the link entirely: keeping the readable ones
 would leave an application believing it had been told everything. A link without a
 timestamp is stamped when it is read, because live data is only worth something if its
-age is known and a sticker carries no clock.
+age is known and a sticker carries no clock. (Both reversed with the upstream 0.15.0
+sync, §7b: a transport that does not hold up is dropped, and a document without
+`created` is not a live link.)
 
 **A bare URL** is recognised from a text file and from a photographed QR code, and is
 **not** contacted unless the application supplies a resolver. Following the link is
@@ -1168,21 +1170,107 @@ signatures. The exit code follows the readings.
 repository blobs of `96a6c56` rather than against a working tree, since the checkout is
 what the line-ending question above was about.
 
-### `29d1d01` — live link keys that are not hex, and COSE keys
+### `1129f34`…`29d1d01` — document signatures, a grid operator, and a tariff that changes
 
-Not a sync: the baseline stays at `96a6c56`. This one change was made here first, in
-`39dbfe8` and `f657a15`, and upstream in parallel, so the two implementations read live
-link keys the same way again — decision 11 describes both, and nothing of it is a
-deviation any more. The message `Verification_COSEKeyCurveNotExpressible` is the same
-key with the same texts on both sides.
+Baseline moves to `29d1d01`: upstream v0.16.1, plus the change to live link keys both
+repositories made together. Twenty-five commits. All 256 fixtures are byte-identical with
+upstream again, compared against the repository blobs: 29 changed — the regenerated
+OCMF-Test-01 series, both live link documents, two fixture READMEs — and 20 are new, the
+documents `__0020` to `__0034`, `OCMF-Test-01__LRLMs.json` and the four PEM files of the
+grid operator. `documentation/` (four files) and `i18n.json` (297 messages) are carried
+verbatim as well.
 
-* **The format README** under `ChargeTransparencyLive/` carries the COSE paragraph
-  upstream and a rewritten "What ChargyCore reads", which no longer describes keys being
-  skipped. ⏳ **Not taken over yet.** Upstream has regenerated the whole OCMF-Test-01
-  series since `96a6c56` — 29 fixtures differ and 20 are new, with a grid operator,
-  legally relevant log messages and a tariff that changes during the session — and the
-  README describes that series. Taking it over alone would leave this tree describing
-  fixtures it does not hold, so it comes with the sync of the series.
+* **`3fd3fa3`, `ba2c868` — the signatures over a whole document** ✅ **ported** as
+  `Crypto.DocumentSignatures`. Every entry of `signatures` is checked: the excluded
+  properties are removed, the rest canonicalized per RFC 8785, the key resolved by its
+  `keyId` under the document's own `keyIdGeneration`, the signature verified. Reading a
+  live link through the detector fills `ChargeTransparencyLiveLink.SignatureVerification`
+  and grades what did not verify into `Warnings` — unsigned is low, unknown key,
+  unsupported algorithm and malformed are medium, a mismatch is high — each said once
+  however many signatures fail the same way. Nothing refuses the document. The fixture is
+  the proof that the canonicalization here produces upstream's bytes: both operator
+  signatures, ECDSA and Ed25519, verify, and `chargy-verify` says so next to the
+  addresses.
+
+  Two differences, both deliberate. The outcome is kept in properties rather than written
+  into the document, as upstream does with `signatureVerification` and `warnings`:
+  `ToJSON()` hands back the document as it was signed. And a raw key is wrapped into its
+  SubjectPublicKeyInfo for every curve and ML-DSA parameter set this library knows, where
+  upstream carries fixed headers for P-256, P-384, P-521, Ed25519 and Ed448 — a key id
+  upstream cannot compute is one this port can, never the other way round.
+
+* **`9af1f4d`, `de4382d` — custom headers, and https polls by default** ✅ **ported.**
+  `Transport.CustomHeaders` holds the literal value or the provider a header names, and
+  is validated on every transport. The live link client, which upstream has no
+  counterpart to, sends the literal ones with every request to that transport — the
+  https poll, the server-sent event request, the WebSocket handshake — and never a
+  provider's description, a field that is not an HTTP token or carries a line break, or
+  one the request machinery owns (`Host`, `Content-Length`, the `Sec-WebSocket-*` fields,
+  `TOTP`). A document says what it wants sent; it does not get to write the request.
+  `Transport.DefaultRefresh` is upstream's ten seconds; the client's `PollingInterval`
+  defaults to the same and still applies where the document says nothing, so a caller who
+  configured another interval keeps it — the policy of `20b7f75`, unchanged.
+
+* **`5696bd3`, `dc19037`, `c6baf4b` — what makes a document a live link** ✅ **ported**,
+  and it reverses what this port did since Phase 5. A live link is its context — alone,
+  or in a list naming it among extensions — a `created` timestamp and a `liveTransports`
+  array. Everything optional is read where it holds up and dropped where it does not, a
+  transport included: refusing the whole document over one bad transport made it fail as
+  an "unknown format", which helps nobody. Reading no longer stamps a missing `created`,
+  which recorded when the document was read; a document without one is not a live link.
+  Endpoints are named in `urls` alone and `url` is not read; `Transport.URL` stays for
+  transports built in code and is written as the first entry of `urls`. The TOTP
+  configuration says `sharedSecret` and gained `validityTime`, `totpLength`, `alphabet`,
+  `timestamp` and `hashAlgorithm`, all of which reach Hermod except `timestamp`, which
+  is carried and not used; a hash algorithm Hermod does not know yields no password
+  rather than a wrong one.
+
+  The rest of `c6baf4b` and `dc19037` gives TypeScript shapes to documents upstream reads
+  as plain JSON — the metrological text aliases, the topology ids, image URLs, an EVSE's
+  power type and maximum, a key's usage and encodings, support messages. This port's
+  model reads what it acts on, and a live link keeps its whole document in
+  `OriginalJSON`, so nothing is lost by not modelling them. The top-level `imageURLs`,
+  `geoLocation` and `connector` upstream dropped from the interface are still read where
+  a document states them.
+
+* **`fe5fbfb` — a TOTP hash algorithm is a string** — part of the above; the series
+  re-signed with it arrives as fixture bytes.
+
+* **`43aff9d` — a grid operator is a party to a charging session** ✅ **ported.**
+  `GridOperator`, of which `@id` is all that is required, is read, written and merged
+  as `ChargeTransparencyRecord.GridOperators`; a live link's `gridOperator` keys are
+  collected for the document signatures. An operator's `contact`, `support` and
+  `privacy` are optional now, upstream's reasoning being that no document carries them
+  and nothing validates them — this port required them and dropped every operator that
+  lacked one, so a record lost the party a driver would dispute a bill with.
+  `ChargingStationOperator.Name` came along.
+
+* **`a02c7a0` — a signed log message, and a tariff that changes** ✅ **ported.** A
+  legally relevant log message is verified against the keys of its document
+  (`DocumentSignatures.VerifyEmbeddedSignatures`, warnings `LogMessageSignature_*`); in
+  the fixture, both signatures of the grid operator's power constraint hold. `TT` is no
+  longer part of the key OCMF documents are grouped by: it split a session at every tariff
+  change, and since only the first group is returned, the readings under every later
+  tariff were dropped without a word — here exactly as upstream, seven of the series'
+  readings. `OCMFBonnTariff.ParseList` reads a tariff history; a record still interprets
+  the first document's `TT` alone, as upstream does. A merge keeps grid operators.
+
+* **`29d1d01` — live link keys that are not hex, and COSE keys** ✅ — the counterpart of
+  `39dbfe8`, `f657a15` and `445a986`, decision 11. Its format README note arrives here
+  with this sync.
+
+* **`1129f34`** — `TryToParseOCMFDocument()` taking an array of keys. No counterpart:
+  `OCMFFormat.TryParseText` takes one key and `TryParseTexts` several.
+
+* **`1e64499`, `90851c8`, `ee2fcc1`, `aefa159`** — documentation, carried verbatim.
+
+* **`398c8da`, `5778cc5`, `6d04f12`, `f678f81`, `b05e9a8`, `f18f808`, `d581232`,
+  `0a886de`, `163863e`** — releases, npm updates, the lock file, Finder metadata and a
+  merge. No counterpart.
+
+The live link tests followed upstream's own lesson of 0.16.0: they no longer name what the
+generator produces — twenty readings, seventeen by the operator, a fixed `created` — but
+count the documents and compare against what a document states. 663 tests pass.
 
 ---
 
@@ -1233,7 +1321,7 @@ defines no context, so every fixture continues to sign and verify with none.
 | 8 | Where does the PDF reader live? | **Styx**, as `org.GraphDefined.Vanaheimr.Illias.PDFDocument` / `PDFParser` / `PDFObject` / `PDFEmbeddedFile`, next to the existing CBOR, COSE, CSV and JSON readers. Reading embedded files out of a PDF/A-3 is not a Chargy concern — ZUGFeRD and Factur-X invoices work the same way. The code was written from scratch against the PDF specification rather than derived from ChargyCore.TS, which uses `pdfjs-dist`, so it carries Styx's Apache-2.0 header. What stays in ChargyCore is `PDFAttachmentExtractor`: the closed list of attachment types worth looking at, behind `IPDFAttachmentExtractor` |
 | 9 | The OCMF secp192 curves | **Deviation from ChargyCore.TS, on purpose.** ChargyCore.TS recognises `ECDSA-secp192k1-SHA256` and `ECDSA-secp192r1-SHA256` but maps neither to a curve, so both end as `InvalidPublicKey`: its JavaScript curve library does not carry them. BouncyCastle does, so this port verifies them. The difference is one-directional and safe — every record that verifies in ChargyCore.TS verifies here, and the only records judged differently are the ones the TypeScript implementation declines to judge at all. No golden file is affected, because no fixture uses these curves |
 | 10 | The OCMF brainpool curves | **The same decision, taken again.** `ECDSA-brainpool256r1-SHA256`, `ECDSA-brainpool384r1-SHA256` and `ECDSA-brainpool384r1-SHA384` were the last three OCMF algorithms this port recognised without being able to check, and BouncyCastle carries RFC 5639 as well. Deciding it a second time was mostly about the name: OCMF writes `brainpool256r1`, everyone else writes `brainpoolP256r1`, and the missing letter is the whole difference between a checkable charging session and an unverifiable one. `ECCurveVerifier` accepts both spellings; the algorithm table names the curve the way RFC 5639 does, which is also what a parsed public key reports. Every ECDSA algorithm OCMF names now resolves to a verifier, and a test states that as a rule so the next curve added cannot quietly miss it |
-| 11 | The public keys of a live link that are not hexadecimal, and COSE keys in particular | **Read where they can be, reported where they cannot — never dropped.** A DER `SubjectPublicKeyInfo` stays the canonical form of a key, because it names its curve by object identifier and every curve has one. A COSE key can only name a curve of the IANA "COSE Elliptic Curves" registry: P-256, P-384, P-521, X25519, X448, Ed25519, Ed448, secp256k1 (RFC 8812) and brainpoolP256r1 to brainpoolP512r1. **secp192r1, secp192k1 and secp224k1 are not in it** — exactly the curves of the EMH, GDF, Alfen and legacy ChargePoint meters and of the OCMF secp192 algorithms. That gap is in the registry, not in an implementation: Styx's `COSECurve` covers the registry completely, and `TheGapIsInTheRegistry` pins that no COSE key on those curves can be written. A private-use `crv` (below −65536) would only move the problem, since nobody but its author can read it, so it is refused rather than offered. `LiveLinkPublicKey` reads the `encodings` pipeline of a key: `hex`, `base64`, `base64url` and `PEM` text; a `SubjectPublicKeyInfo` or raw key as it is (an EdDSA or ML-DSA `SubjectPublicKeyInfo` unwrapped to the raw octets its verifier takes); a `COSE_Key` through Styx's `COSEKey`, an EC2 key becoming the `SubjectPublicKeyInfo` of its curve and an OKP or AKP key its raw octets; an `ECPoint` wrapped with the curve its `algorithm` names. A hexadecimal key reaches the verifier byte for byte as before. A key that cannot be read used to be skipped without a word, and the readings it signed then failed against the remaining keys as if their signatures did not match. It is now kept with its reason: such a reading takes that key's verdict — `UnknownPublicKeyFormat`, or `InvalidPublicKey` for a value that does not decode — together with the reason, unless it failed for a reason of its own that no key would have changed, and the record carries one error per unreadable key. A COSE key whose curve is missing, unregistered or private-use says so with its own message, `Verification_COSEKeyCurveNotExpressible`, under `UnknownPublicKeyFormat`: no new `VerificationResult` member, because those names are the wire format of the golden reports. Key ids are unaffected: `keyIdGeneration` hashes the `SubjectPublicKeyInfo` whatever form a key is stored in, so an id is defined for every curve. The format README under `ChargyCoreTests/TestData/ChargeTransparencyLive/` lists `["COSE_Key", "CBOR", "base64url"]` without this restriction, but it is one of the 236 fixtures shared with ChargyCore.TS byte for byte, so the note went upstream first. ChargyCore.TS `29d1d01` carries it, together with the same reading of live link keys, and it arrives here with the sync of the regenerated live link series, §7b |
+| 11 | The public keys of a live link that are not hexadecimal, and COSE keys in particular | **Read where they can be, reported where they cannot — never dropped.** A DER `SubjectPublicKeyInfo` stays the canonical form of a key, because it names its curve by object identifier and every curve has one. A COSE key can only name a curve of the IANA "COSE Elliptic Curves" registry: P-256, P-384, P-521, X25519, X448, Ed25519, Ed448, secp256k1 (RFC 8812) and brainpoolP256r1 to brainpoolP512r1. **secp192r1, secp192k1 and secp224k1 are not in it** — exactly the curves of the EMH, GDF, Alfen and legacy ChargePoint meters and of the OCMF secp192 algorithms. That gap is in the registry, not in an implementation: Styx's `COSECurve` covers the registry completely, and `TheGapIsInTheRegistry` pins that no COSE key on those curves can be written. A private-use `crv` (below −65536) would only move the problem, since nobody but its author can read it, so it is refused rather than offered. `LiveLinkPublicKey` reads the `encodings` pipeline of a key: `hex`, `base64`, `base64url` and `PEM` text; a `SubjectPublicKeyInfo` or raw key as it is (an EdDSA or ML-DSA `SubjectPublicKeyInfo` unwrapped to the raw octets its verifier takes); a `COSE_Key` through Styx's `COSEKey`, an EC2 key becoming the `SubjectPublicKeyInfo` of its curve and an OKP or AKP key its raw octets; an `ECPoint` wrapped with the curve its `algorithm` names. A hexadecimal key reaches the verifier byte for byte as before. A key that cannot be read used to be skipped without a word, and the readings it signed then failed against the remaining keys as if their signatures did not match. It is now kept with its reason: such a reading takes that key's verdict — `UnknownPublicKeyFormat`, or `InvalidPublicKey` for a value that does not decode — together with the reason, unless it failed for a reason of its own that no key would have changed, and the record carries one error per unreadable key. A COSE key whose curve is missing, unregistered or private-use says so with its own message, `Verification_COSEKeyCurveNotExpressible`, under `UnknownPublicKeyFormat`: no new `VerificationResult` member, because those names are the wire format of the golden reports. Key ids are unaffected: `keyIdGeneration` hashes the `SubjectPublicKeyInfo` whatever form a key is stored in, so an id is defined for every curve. The format README under `ChargyCoreTests/TestData/ChargeTransparencyLive/` lists `["COSE_Key", "CBOR", "base64url"]` without this restriction, but it is one of the fixtures shared with ChargyCore.TS byte for byte, so the note went upstream first: ChargyCore.TS `29d1d01` carries it, together with the same reading of live link keys, and it arrived here with the sync of that commit, §7b |
 
 ### Deviations from ChargyCore.TS
 
@@ -1273,6 +1361,13 @@ a deviation has to be maintained forever, an upstream fix does not.
   behaviour change and belongs upstream first, so it is recorded rather than
   implemented. `AnIncompleteTransactionStillCarriesAValidSignature` pins the current
   answer either way.
+
+* **Only the first group of OCMF documents is returned.** Documents that disagree
+  about who charged on which meter are grouped apart, and `OCMFFormat.TryParse` returns
+  the first group alone. Upstream a02c7a0 took the tariff text out of that key because it
+  split one session in two, and calls the rule itself worth revisiting separately. The
+  same holds here: a file carrying two sessions shows one of them without a word about
+  the other.
 
 * **`PublicKeyParser.TryParseDER` handles named curves only.** A SubjectPublicKeyInfo
   that spells its curve out as explicit domain parameters instead of naming it by

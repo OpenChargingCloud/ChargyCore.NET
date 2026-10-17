@@ -19,6 +19,8 @@
 
 using Newtonsoft.Json.Linq;
 
+using org.GraphDefined.Vanaheimr.Illias;
+
 #endregion
 
 namespace cloud.charging.open.chargy.tests
@@ -52,17 +54,93 @@ namespace cloud.charging.open.chargy.tests
 
         #endregion
 
-        #region An_operator_without_a_reachable_contact_is_rejected()
+        #region An_operator_without_contact_details_is_still_an_operator()
 
         [Test]
-        public void An_operator_without_a_reachable_contact_is_rejected()
+        public void An_operator_without_contact_details_is_still_an_operator()
         {
 
-            // An operator an EV driver cannot reach is of no use in a dispute,
-            // which is why the CTR format makes these three mandatory.
-            var withoutContacts = JObject.Parse("""{ "@id": "DE*GEF" }""");
+            // Contact, support and privacy are optional since upstream 0.16.0. No
+            // record in either repository carries them, nothing validates them,
+            // and requiring them dropped the operator of every record that left
+            // them out — which loses the party a driver would dispute a bill with.
+            var withoutContacts = JObject.Parse("""{ "@id": "DE*GEF", "name": { "en": "GraphDefined" } }""");
 
-            Assert.That(ChargingStationOperator.TryParse(withoutContacts, out _),  Is.False);
+            Assert.That(ChargingStationOperator.TryParse(withoutContacts, out var chargingStationOperator),  Is.True);
+
+            Assert.Multiple(() => {
+                Assert.That(chargingStationOperator!.Contact,           Is.Null);
+                Assert.That(chargingStationOperator. Name?[Languages.en], Is.EqualTo("GraphDefined"));
+                Assert.That(chargingStationOperator. ToJSON().ContainsKey("contact"),  Is.False);
+            });
+
+        }
+
+        #endregion
+
+        #region A_grid_operator_needs_nothing_but_its_id()
+
+        [Test]
+        public void A_grid_operator_needs_nothing_but_its_id()
+        {
+
+            // A grid operator runs no pools, stations or tariffs; its identity and
+            // the keys it signs its power constraints with are what it is for.
+            var json = JObject.Parse("""
+                {
+                    "@id":        "DE*VEN",
+                    "name":       { "en": "Vanaheimr Electric" },
+                    "publicKeys": [ { "value": "3059301306072A8648CE3D020106082A8648CE3D03010703420004B8", "keyUsage": [ "signGridPowerConstraints" ] } ]
+                }
+                """);
+
+            Assert.That(GridOperator.TryParse(json, out var gridOperator),                     Is.True);
+            Assert.That(GridOperator.TryParse(JObject.Parse("""{ "name": "x" }"""), out _),    Is.False);
+
+            Assert.That(GridOperator.TryParse(gridOperator!.ToJSON(), out var roundTripped),   Is.True);
+
+            Assert.Multiple(() => {
+                Assert.That(roundTripped!.Id,                  Is.EqualTo("DE*VEN"));
+                Assert.That(roundTripped. Name?[Languages.en], Is.EqualTo("Vanaheimr Electric"));
+            });
+
+        }
+
+        #endregion
+
+        #region Grid_operators_survive_a_record_round_trip_and_a_merge()
+
+        [Test]
+        public async Task Grid_operators_survive_a_record_round_trip_and_a_merge()
+        {
+
+            static JObject Record(String Id, String GridOperatorId)
+
+                => JObject.Parse($$"""
+                       {
+                           "@id":           "{{Id}}",
+                           "@context":      "https://open.charging.cloud/contexts/CTR+json",
+                           "begin":         "2026-09-08T10:00:00Z",
+                           "end":           "2026-09-08T10:05:00Z",
+                           "gridOperators": [ { "@id": "{{GridOperatorId}}" } ],
+                           "chargingSessions": []
+                       }
+                       """);
+
+            Assert.That(ChargeTransparencyRecord.TryParse(Record("CTR-1", "DE*VEN"), out var record),  Is.True);
+            Assert.That(ChargeTransparencyRecord.TryParse(record!.ToJSON(), out var roundTripped),     Is.True);
+            Assert.That(roundTripped!.GridOperators.Select(gridOperator => gridOperator.Id),           Is.EqualTo(new[] { "DE*VEN" }));
+
+            // Two records merged into one keep both grid operators: upstream lost
+            // them in every merge until a02c7a0.
+            var merged = await Verify([
+                             new FileInfo("ctr1.json", System.Text.Encoding.UTF8.GetBytes(Record("CTR-1", "DE*VEN").ToString()), "application/json"),
+                             new FileInfo("ctr2.json", System.Text.Encoding.UTF8.GetBytes(Record("CTR-2", "DE*EON").ToString()), "application/json")
+                         ]);
+
+            Assert.That(merged,  Is.InstanceOf<ChargeTransparencyRecord>(), VerificationReport.Format(merged));
+            Assert.That(((ChargeTransparencyRecord) merged).GridOperators.Select(gridOperator => gridOperator.Id),
+                        Is.EquivalentTo(new[] { "DE*VEN", "DE*EON" }));
 
         }
 
@@ -104,9 +182,9 @@ namespace cloud.charging.open.chargy.tests
             Assert.Multiple(() => {
 
                 Assert.That(operatorTwo.Id,                                Is.EqualTo("DE*GEF"));
-                Assert.That(operatorTwo.Contact.EMail,                     Is.EqualTo("mail@graphdefined.com"));
-                Assert.That(operatorTwo.Support.Hotline,                   Is.EqualTo("+49 123 456"));
-                Assert.That(operatorTwo.Privacy.Contact,                   Is.EqualTo("Achim"));
+                Assert.That(operatorTwo.Contact?.EMail,                     Is.EqualTo("mail@graphdefined.com"));
+                Assert.That(operatorTwo.Support?.Hotline,                   Is.EqualTo("+49 123 456"));
+                Assert.That(operatorTwo.Privacy?.Contact,                   Is.EqualTo("Achim"));
                 Assert.That(operatorTwo.GeoLocation?.Latitude. Value,      Is.EqualTo(50.9));
                 Assert.That(operatorTwo.GeoLocation?.Longitude.Value,      Is.EqualTo(11.6));
 

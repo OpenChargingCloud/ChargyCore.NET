@@ -89,8 +89,8 @@ namespace cloud.charging.open.chargy.tests
 
             var fixtures = Directory.GetFiles(TestDataDirectory, "*", SearchOption.AllDirectories);
 
-            Assert.That(fixtures.Length,  Is.EqualTo(236),
-                        "ChargyCore.TS ships 236 test fixtures, all of which are shared with this port.");
+            Assert.That(fixtures.Length,  Is.EqualTo(256),
+                        "ChargyCore.TS ships 256 test fixtures, all of which are shared with this port.");
 
         }
 

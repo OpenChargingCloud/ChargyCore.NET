@@ -56,9 +56,9 @@ namespace cloud.charging.open.chargy.tests
         #region Data
 
         /// <summary>
-        /// The last document of the OCMF-Test-01 series: twenty readings, the
-        /// first and the last signed by the meter, the others by the operator,
-        /// all on secp256r1.
+        /// The last document of the OCMF-Test-01 series: the meter signs the start
+        /// and the end value, the operator the readings in between, all on
+        /// secp256r1.
         /// </summary>
         private const String CompletedSession = "ChargeTransparencyLive/ChargeTransparencyLiveLink_1.json";
 
@@ -131,6 +131,8 @@ namespace cloud.charging.open.chargy.tests
 
             Assert.Multiple(() => {
                 Assert.That(StatusesOf(record),                                     Is.All.EqualTo(VerificationResult.ValidSignature), VerificationReport.Format(record));
+                // Every reading of the session, each signed anew.
+                Assert.That(StatusesOf(record),                                     Has.Length.EqualTo(StatusesOf(MeterValues(LiveLink())).Length));
                 Assert.That(record.ChargingSessions[0].VerificationResult?.Status,  Is.EqualTo(SessionVerificationResult.ValidSignature));
             });
 
@@ -169,12 +171,15 @@ namespace cloud.charging.open.chargy.tests
             var record    = MeterValues(liveLink);
             var results   = ResultsOf(record);
 
+            var (total, byOperator) = ReadingsSignedByTheOperator();
+            Assert.That(total - byOperator,  Is.GreaterThan(0));
+
             Assert.Multiple(() => {
 
                 // The operator's readings are untouched by the meter's key.
-                Assert.That(results.Count(result => result.Status == VerificationResult.ValidSignature),          Is.EqualTo(17));
+                Assert.That(results.Count(result => result.Status == VerificationResult.ValidSignature),          Is.EqualTo(byOperator));
 
-                Assert.That(results.Count(result => result.Status == VerificationResult.UnknownPublicKeyFormat),  Is.EqualTo(3),
+                Assert.That(results.Count(result => result.Status == VerificationResult.UnknownPublicKeyFormat),  Is.EqualTo(total - byOperator),
                             VerificationReport.Format(record));
 
                 Assert.That(results.Where (result => result.Status == VerificationResult.UnknownPublicKeyFormat).
@@ -238,6 +243,8 @@ namespace cloud.charging.open.chargy.tests
 
             Assert.Multiple(() => {
                 Assert.That(StatusesOf(record),                                     Is.All.EqualTo(VerificationResult.ValidSignature), VerificationReport.Format(record));
+                // Every reading of the session, each signed anew.
+                Assert.That(StatusesOf(record),                                     Has.Length.EqualTo(StatusesOf(MeterValues(LiveLink())).Length));
                 Assert.That(record.ChargingSessions[0].VerificationResult?.Status,  Is.EqualTo(SessionVerificationResult.ValidSignature));
             });
 
@@ -303,10 +310,13 @@ namespace cloud.charging.open.chargy.tests
             var record   = MeterValues(liveLink);
             var results  = ResultsOf(record);
 
+            var (total, byOperator) = ReadingsSignedByTheOperator();
+            Assert.That(total - byOperator,  Is.GreaterThan(0));
+
             Assert.Multiple(() => {
 
-                Assert.That(results.Count(result => result.Status == VerificationResult.ValidSignature),          Is.EqualTo(17));
-                Assert.That(results.Count(result => result.Status == VerificationResult.UnknownPublicKeyFormat),  Is.EqualTo(3),
+                Assert.That(results.Count(result => result.Status == VerificationResult.ValidSignature),          Is.EqualTo(byOperator));
+                Assert.That(results.Count(result => result.Status == VerificationResult.UnknownPublicKeyFormat),  Is.EqualTo(total - byOperator),
                             VerificationReport.Format(record));
 
                 Assert.That(results.Select(result => result.Status),
@@ -516,6 +526,29 @@ namespace cloud.charging.open.chargy.tests
 
         #endregion
 
+        #region (private, static) ReadingsSignedByTheOperator()
+
+        /// <summary>
+        /// How many readings the session has, and how many the operator's key
+        /// verifies on its own — the rest are the meter's. Counted rather than
+        /// named, because the series is regenerated whenever its generator learns
+        /// something new.
+        /// </summary>
+        private static (Int32 Total, Int32 ByOperator) ReadingsSignedByTheOperator()
+        {
+
+            var liveLink = LiveLink();
+
+            liveLink["chargingStation"]!["EVSE"]!["energyMeter"]!["publicKeys"] = new JArray();
+
+            var results  = ResultsOf(MeterValues(liveLink));
+
+            return (results.Length, results.Count(result => result.Status == VerificationResult.ValidSignature));
+
+        }
+
+        #endregion
+
         #region (private, static) MeterKeysOf / MeterKeyOf / MeterValueKeys(LiveLink)
 
         private static JToken MeterKeysOf(JObject LiveLink)
@@ -576,7 +609,9 @@ namespace cloud.charging.open.chargy.tests
                                 Select(value => value.Value<String>()!).
                                 Select(document => {
 
-                                    var payload = document.Split('|')[1];
+                                    // Between the first and the last bar: a tariff text may
+                                    // carry bars of its own.
+                                    var payload = document[(document.IndexOf('|') + 1)..document.LastIndexOf('|')];
 
                                     return $"OCMF|{payload}|{{\"SA\":\"{SA}\",\"SE\":\"hex\",\"SM\":\"application/x-der\",\"SD\":\"{OCMFTestSigner.Sign(KeyPair, payload, hashName)}\"}}";
 

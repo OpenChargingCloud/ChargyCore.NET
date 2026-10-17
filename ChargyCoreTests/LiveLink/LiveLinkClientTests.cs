@@ -249,7 +249,7 @@ namespace cloud.charging.open.chargy.tests.LiveLink
             // The station computes the same three passwords for this moment, and
             // accepts any of them: a phone and a charging station never agree on
             // the clock to the second.
-            var expected = TOTPGenerator.GenerateTOTPs(totp.InitialSharedSecret, TimeSpan.FromSeconds(totp.TimeStep));
+            var expected = TOTPGenerator.GenerateTOTPs(totp.SharedSecret, TimeSpan.FromSeconds(totp.TimeStep!.Value));
 
             Assert.That(header, Is.Not.Null, "no TOTP header was sent");
 
@@ -267,6 +267,45 @@ namespace cloud.charging.open.chargy.tests.LiveLink
                 // ..., and the address is untouched.
                 Assert.That(service.Paths, Has.All.EqualTo("/live"));
 
+            });
+
+        }
+
+        #endregion
+
+        #region TheCustomHeadersOfATransportAreSent()
+
+        /// <summary>
+        /// A transport may state the headers its endpoint expects — an API key, a
+        /// tenant selector — and they go with every request to it (upstream
+        /// 0.14.3). A value a provider computes is not sent: nobody here knows
+        /// what the provider means, and its description is not a value.
+        /// </summary>
+        [Test]
+        public async Task TheCustomHeadersOfATransportAreSent()
+        {
+
+            using var service = new LocalHTTPService("application/json", Payload);
+
+            var transport = new Transport(
+                                TransportType.HTTPS,
+                                service.URL,
+                                CustomHeaders: [
+                                    new ("X-API-Key",  CustomHeaderValue.FromLiteral ("abc123")),
+                                    new ("X-TOTP",     CustomHeaderValue.FromProvider("TOTP")),
+                                    new ("Host",       CustomHeaderValue.FromLiteral ("elsewhere.example"))
+                                ]
+                            );
+
+            await Take(
+                      Client(PollingInterval: TimeSpan.FromMilliseconds(50)).Connect(LiveLinkFor(transport)),
+                      1
+                  );
+
+            Assert.Multiple(() => {
+                Assert.That(service.Headers.FirstOrDefault(header => header.Key == "X-API-Key").Value,  Is.EqualTo("abc123"));
+                Assert.That(service.Headers.Any(header => header.Key == "X-TOTP"),                       Is.False);
+                Assert.That(service.Headers.Any(header => header.Key == "Host" && header.Value == "elsewhere.example"),  Is.False);
             });
 
         }

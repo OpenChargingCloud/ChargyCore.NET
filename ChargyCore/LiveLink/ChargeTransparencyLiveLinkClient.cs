@@ -302,6 +302,9 @@ namespace cloud.charging.open.chargy.LiveLink
             if (LiveLinkEndpoints.CurrentTOTPHeader(Transport.TOTP) is String totp)
                 request.Headers.TryAddWithoutValidation("TOTP", totp);
 
+            foreach (var (name, value) in LiveLinkEndpoints.LiteralHeaders(Transport))
+                request.Headers.TryAddWithoutValidation(name, value);
+
             HttpResponseMessage? response = null;
 
             try
@@ -416,7 +419,13 @@ namespace cloud.charging.open.chargy.LiveLink
 
                 try
                 {
-                    await client.Connect(CancellationToken: CancellationToken).
+                    await client.Connect(
+                                     HTTPRequestBuilder:  builder => {
+                                                              foreach (var (name, value) in LiveLinkEndpoints.LiteralHeaders(Transport))
+                                                                  builder.SetHeaderField(name, value);
+                                                          },
+                                     CancellationToken:   CancellationToken
+                                 ).
                                  WaitAsync(Timeout, CancellationToken).
                                  ConfigureAwait(false);
                 }
@@ -503,6 +512,10 @@ namespace cloud.charging.open.chargy.LiveLink
                                  Accept:              Accept is not null
                                                           ? AcceptTypes.FromHTTPContentTypes(Accept)
                                                           : null,
+                                 RequestBuilder:      builder => {
+                                                          foreach (var (name, value) in LiveLinkEndpoints.LiteralHeaders(Transport))
+                                                              builder.SetHeaderField(name, value);
+                                                      },
                                  RequestTimeout:      Timeout,
                                  CancellationToken:   CancellationToken
                              ).ConfigureAwait(false);
