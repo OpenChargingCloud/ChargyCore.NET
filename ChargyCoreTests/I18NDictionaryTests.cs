@@ -42,10 +42,11 @@ namespace cloud.charging.open.chargy.tests
 
             var i18n = I18NDictionary.Default();
 
-            // One more than ChargyCore.TS: "Verification_COSEKeyCurveNotExpressible"
-            // is this port's own until upstream reads COSE keys in a live link.
+            // The 286 of the baseline 96a6c56, plus "Verification_COSEKeyCurveNotExpressible",
+            // which this port and ChargyCore.TS 29d1d01 added together. The keys upstream
+            // gained in between belong to what this port has not followed yet.
             Assert.That(i18n.Count,  Is.EqualTo(287),
-                        "i18n.json of ChargyCore.TS holds 286 message keys, plus the one of this port.");
+                        "i18n.json of ChargyCore.TS 96a6c56 holds 286 message keys, and 29d1d01 adds one.");
 
         }
 
