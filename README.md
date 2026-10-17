@@ -376,6 +376,16 @@ paired with SHA-256 and `secp384r1` paired with SHA-256, use a digest that does 
 their curve — but meters were built that way and signed real charging sessions with it, so
 Chargy verifies them exactly as they were signed rather than "correcting" anything.
 
+That every one of these curves is checkable rests on the public keys arriving as a DER
+`SubjectPublicKeyInfo`, which names its curve by object identifier — and every curve has
+one. COSE cannot do the same for three of them: a COSE key names its curve through the
+IANA "COSE Elliptic Curves" registry, which has entries for P-256, P-384, P-521, secp256k1
+and the brainpool curves, but none for secp192r1, secp192k1 and secp224k1 — the curves of
+the EMH, GDF, Alfen and legacy ChargePoint meters. A live link may still list a key as a
+COSE key on a registered curve; a key on one of the other three has to be a
+`SubjectPublicKeyInfo`, and a COSE key that names no registered curve is reported as such
+rather than taken for a broken one.
+
 
 ### Packaging
 
