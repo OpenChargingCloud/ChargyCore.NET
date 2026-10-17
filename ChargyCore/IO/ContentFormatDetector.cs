@@ -232,10 +232,11 @@ namespace cloud.charging.open.chargy.IO
                 return null;
 
             var publicKeys  = CollectLiveLinkMeterValueKeys(LiveLink);
+            var usableKeys  = publicKeys.Where(publicKey => publicKey.IsUsable).Select(publicKey => publicKey.KeyHEX!).ToArray();
 
             var result      = ocmf.TryParseTexts(
                                   values.Select(value => value.Value<String>()!),
-                                  publicKeys.Count > 0 ? publicKeys : null
+                                  usableKeys.Length > 0 ? usableKeys : null
                               );
 
             // A meter value section that cannot be read must not cost us the live
@@ -243,9 +244,12 @@ namespace cloud.charging.open.chargy.IO
             // show. And what can be read goes through the very same verification
             // every other charge transparency record does, so the meter values
             // arrive with their crypto results.
-            return result is ChargeTransparencyRecord record
-                       ? new ChargeTransparencyRecordProcessor(I18N, ValidationRules).Process(record)
-                       : null;
+            if (result is not ChargeTransparencyRecord record)
+                return null;
+
+            ReportUnusableKeys(record, [ .. publicKeys.Where(publicKey => !publicKey.IsUsable) ]);
+
+            return new ChargeTransparencyRecordProcessor(I18N, ValidationRules).Process(record);
 
         }
 
@@ -254,18 +258,24 @@ namespace cloud.charging.open.chargy.IO
         #region (private, static) CollectLiveLinkMeterValueKeys(LiveLink)
 
         /// <summary>
-        /// Every public key of the document that is allowed to sign meter values.
+        /// Every public key of the document that is allowed to sign meter values,
+        /// including the ones that cannot be read.
         ///
         /// A charging session is regularly signed by more than one of them: the
         /// meter signs its start and end values, the operator the intermediate
         /// ones, and an operator may hold several keys at a time while rotating
         /// them.
+        ///
+        /// A key whose encoding cannot be read is kept, with the reason, rather
+        /// than left out: it is still a key that may have signed some of the
+        /// readings, and leaving it out would make those readings look as if they
+        /// did not match rather than as if they could not be checked.
         /// </summary>
         /// <param name="LiveLink">A charge transparency live link.</param>
-        private static IReadOnlyList<String> CollectLiveLinkMeterValueKeys(ChargeTransparencyLiveLink LiveLink)
+        private static IReadOnlyList<LiveLinkPublicKey> CollectLiveLinkMeterValueKeys(ChargeTransparencyLiveLink LiveLink)
         {
 
-            var publicKeys = new List<String>();
+            var publicKeys = new List<LiveLinkPublicKey>();
 
             void CollectFrom(JToken? Candidates)
             {
@@ -276,20 +286,8 @@ namespace cloud.charging.open.chargy.IO
                 foreach (var candidate in candidates.OfType<JObject>())
                 {
 
-                    if (candidate["value"]?.Value<String>() is not String value ||
-                        value.Length == 0)
-                    {
-                        continue;
-                    }
-
-                    // The key has to be hexadecimal, because that is the encoding
-                    // it is passed on with below.
-                    if (candidate["encodings"] is JArray keyEncodings &&
-                        keyEncodings.LastOrDefault()?.Value<String>() != "hex")
-                    {
-                        continue;
-                    }
-
+                    // A key for something else is not a candidate, however it is
+                    // encoded — and so it is not a key that could not be read.
                     if (candidate["keyUsage"] is JArray keyUsage &&
                        !keyUsage.Any(usage => usage.Value<String>() == "signMeterValues" ||
                                               usage.Value<String>() == "signEnergyMeterValues"))
@@ -297,7 +295,8 @@ namespace cloud.charging.open.chargy.IO
                         continue;
                     }
 
-                    publicKeys.Add(value);
+                    if (LiveLinkPublicKey.Read(candidate) is LiveLinkPublicKey publicKey)
+                        publicKeys.Add(publicKey);
 
                 }
 
@@ -309,6 +308,66 @@ namespace cloud.charging.open.chargy.IO
             CollectFrom(document?["chargingStation"]?["EVSE"]?["energyMeter"]?["publicKeys"]);
 
             return publicKeys;
+
+        }
+
+        #endregion
+
+        #region (private) ReportUnusableKeys(Record, UnusableKeys)
+
+        /// <summary>
+        /// Say which of the document's keys could not be read, and what that
+        /// means for the readings none of the other keys verified.
+        ///
+        /// Such a reading cannot be called invalid: the key that could have
+        /// verified it is right there, just not in a form this library reads. So
+        /// it takes the verdict of that key — the format is unknown, or the key
+        /// is invalid — and the reason, next to whatever the other keys found.
+        /// A reading that failed for reasons of its own, an unknown algorithm or
+        /// a malformed signature, keeps its verdict: no key would have changed it.
+        ///
+        /// The record carries the keys as well, so that an unreadable key is not
+        /// only visible where it happened to matter.
+        /// </summary>
+        /// <param name="Record">The meter values, parsed and checked against the readable keys.</param>
+        /// <param name="UnusableKeys">The keys that could not be read.</param>
+        private void ReportUnusableKeys(ChargeTransparencyRecord            Record,
+                                        IReadOnlyList<LiveLinkPublicKey>    UnusableKeys)
+        {
+
+            if (UnusableKeys.Count == 0)
+                return;
+
+            foreach (var unusableKey in UnusableKeys)
+                if (unusableKey.ToError(I18N, SeverityLevel.Medium) is Error error)
+                    Record.AddError(error);
+
+            foreach (var result in Record.ChargingSessions.
+                                          SelectMany(session     => session.Measurements).
+                                          SelectMany(measurement => measurement.Values).
+                                          Select    (value       => value.Result).
+                                          // Readings of one document could share
+                                          // a result, and a reason is said once.
+                                          Distinct  ())
+            {
+
+                if (result is null ||
+                    result.Status is not (VerificationResult.PublicKeyNotFound      or
+                                          VerificationResult.UnknownPublicKeyFormat or
+                                          VerificationResult.InvalidPublicKey       or
+                                          VerificationResult.InvalidSignature)      ||
+                    result.Errors.Any(error => error.Code == "Verification_SignatureMalformed"))
+                {
+                    continue;
+                }
+
+                result.Status = UnusableKeys[0].Status!.Value;
+
+                foreach (var unusableKey in UnusableKeys)
+                    if (unusableKey.ToError(I18N) is Error error)
+                        result.AddError(error);
+
+            }
 
         }
 

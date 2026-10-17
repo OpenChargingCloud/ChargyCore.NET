@@ -22,6 +22,7 @@ using System.Text;
 
 using Org.BouncyCastle.Asn1;
 using Org.BouncyCastle.Asn1.X9;
+using Org.BouncyCastle.Crypto;
 using Org.BouncyCastle.Crypto.Generators;
 using Org.BouncyCastle.Crypto.Parameters;
 using Org.BouncyCastle.Crypto.Signers;
@@ -60,6 +61,27 @@ namespace cloud.charging.open.chargy.tests.Formats
                                                                       String  HashName = "SHA256")
         {
 
+            var keyPair = NewKeyPair(CurveName);
+
+            return (
+                       PublicKeyHEX(keyPair),
+                       Sign(keyPair, Payload, HashName)
+                   );
+
+        }
+
+        #endregion
+
+        #region NewKeyPair(CurveName)
+
+        /// <summary>
+        /// A fresh key pair on the given curve, for signing more than one payload
+        /// with the same key — a charging session needs at least two readings.
+        /// </summary>
+        /// <param name="CurveName">The name of an elliptic curve, as BouncyCastle spells it.</param>
+        public static AsymmetricCipherKeyPair NewKeyPair(String CurveName)
+        {
+
             var curveOID    = ECNamedCurveTable.GetOid(CurveName)
                                   ?? throw new InvalidOperationException($"BouncyCastle does not know the curve '{CurveName}'!");
 
@@ -74,10 +96,43 @@ namespace cloud.charging.open.chargy.tests.Formats
             var generator   = new ECKeyPairGenerator();
             generator.Init(new ECKeyGenerationParameters(domain, new SecureRandom()));
 
-            var keyPair     = generator.GenerateKeyPair();
+            return generator.GenerateKeyPair();
+
+        }
+
+        #endregion
+
+        #region PublicKeyHEX(KeyPair)
+
+        /// <summary>
+        /// The public key of the given key pair as a DER SubjectPublicKeyInfo,
+        /// hexadecimal.
+        /// </summary>
+        /// <param name="KeyPair">A key pair.</param>
+        public static String PublicKeyHEX(AsymmetricCipherKeyPair KeyPair)
+
+            => Convert.ToHexStringLower(
+                   SubjectPublicKeyInfoFactory.CreateSubjectPublicKeyInfo(KeyPair.Public).GetDerEncoded()
+               );
+
+        #endregion
+
+        #region Sign(KeyPair, Payload, HashName = "SHA256")
+
+        /// <summary>
+        /// Sign an OCMF payload with the given key pair: the signature as DER over
+        /// the digest the algorithm name prescribes, hexadecimal.
+        /// </summary>
+        /// <param name="KeyPair">A key pair on an elliptic curve.</param>
+        /// <param name="Payload">The raw OCMF payload.</param>
+        /// <param name="HashName">The digest the OCMF algorithm names, "SHA256" or "SHA384".</param>
+        public static String Sign(AsymmetricCipherKeyPair  KeyPair,
+                                  String                   Payload,
+                                  String                   HashName = "SHA256")
+        {
 
             var signer      = new ECDsaSigner();
-            signer.Init(true, new ParametersWithRandom((ECPrivateKeyParameters) keyPair.Private, new SecureRandom()));
+            signer.Init(true, new ParametersWithRandom((ECPrivateKeyParameters) KeyPair.Private, new SecureRandom()));
 
             var message     = Encoding.UTF8.GetBytes(Payload);
 
@@ -95,12 +150,7 @@ namespace cloud.charging.open.chargy.tests.Formats
                                   new DerInteger(signature[1])
                               ).GetDerEncoded();
 
-            var publicKey   = SubjectPublicKeyInfoFactory.CreateSubjectPublicKeyInfo(keyPair.Public).GetDerEncoded();
-
-            return (
-                       Convert.ToHexStringLower(publicKey),
-                       Convert.ToHexStringLower(der)
-                   );
+            return Convert.ToHexStringLower(der);
 
         }
 

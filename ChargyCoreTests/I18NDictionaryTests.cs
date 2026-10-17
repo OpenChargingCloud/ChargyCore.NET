@@ -42,8 +42,10 @@ namespace cloud.charging.open.chargy.tests
 
             var i18n = I18NDictionary.Default();
 
-            Assert.That(i18n.Count,  Is.EqualTo(286),
-                        "i18n.json of ChargyCore.TS holds 286 message keys.");
+            // One more than ChargyCore.TS: "Verification_COSEKeyCurveNotExpressible"
+            // is this port's own until upstream reads COSE keys in a live link.
+            Assert.That(i18n.Count,  Is.EqualTo(287),
+                        "i18n.json of ChargyCore.TS holds 286 message keys, plus the one of this port.");
 
         }
 
