@@ -1377,9 +1377,11 @@ a deviation has to be maintained forever, an upstream fix does not.
   guess — in particular a well-known curve with a generator of its own. See the
   deviations table above.
 
-* **No `CHANGELOG.md`.** Upstream keeps one and this port does not. It changes nothing
-  the library computes, which is why it is listed rather than scheduled. (The other
-  half of this point, the missing Windows CI leg, is done — see §7b.)
+* ~~**No `CHANGELOG.md`.**~~ — **done.** [CHANGELOG.md](CHANGELOG.md) follows upstream's
+  Keep a Changelog layout. Nothing has been released yet, so its single `Unreleased`
+  section describes the first release as a whole rather than beginning in the middle
+  of a history. (The other half of this point, the missing Windows CI leg, is done —
+  see §7b.)
 
 * **Existing prior art** — `VanaheimrElectric/libs/WWCP_OCPP/WWCP_OCPP_Common/Chargy/`
   holds a small (~700 LOC) partial Chargy port (`ChargyLib`, `ACrypt`, `EMHCrypt01`,
