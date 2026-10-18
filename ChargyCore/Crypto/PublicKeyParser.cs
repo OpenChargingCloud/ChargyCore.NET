@@ -174,12 +174,33 @@ namespace cloud.charging.open.chargy.Crypto
                 var algorithm = info.Algorithm.Algorithm.Id;
                 var keyBytes  = info.PublicKey.GetBytes();
 
-                // Elliptic curve keys name their curve in the algorithm parameters.
+                // Elliptic curve keys name their curve in the algorithm parameters,
+                // or spell it out as explicit domain parameters.
                 if (algorithm == X9ObjectIdentifiers.IdECPublicKey.Id)
                 {
 
-                    var curveOID   = DerObjectIdentifier.GetInstance(info.Algorithm.Parameters);
-                    var curveName  = NormalizeCurveName(ECNamedCurveTable.GetName(curveOID));
+                    var parameters = X962Parameters.GetInstance(info.Algorithm.Parameters);
+
+                    String? curveName;
+
+                    if (parameters.IsNamedCurve)
+                        curveName = NormalizeCurveName(ECNamedCurveTable.GetName(DerObjectIdentifier.GetInstance(parameters.Parameters)));
+
+                    else
+                    {
+
+                        // Explicit parameters are only taken for a curve Chargy knows,
+                        // and only when every one of them is that curve's. A key with
+                        // parameters of its own is not guessed at, and neither is one
+                        // that leaves them to the issuer's certificate (implicitlyCA).
+                        curveName = parameters.IsImplicitlyCA
+                                        ? null
+                                        : NameOfExplicitCurve(X9ECParameters.GetInstance(parameters.Parameters));
+
+                        if (curveName is null)
+                            return null;
+
+                    }
 
                     return new ParsedPublicKey(
                                ChargyAlgorithmName(curveName),
@@ -250,6 +271,62 @@ namespace cloud.charging.open.chargy.Crypto
                    hex.Length % 2 == 0 &&
                    hex.StartsWith("30", StringComparison.OrdinalIgnoreCase) &&
                    HexRegex().IsMatch(hex);
+
+        }
+
+        #endregion
+
+        #region (private) NameOfExplicitCurve(Parameters)
+
+        /// <summary>
+        /// The curves that explicit domain parameters are compared against: the
+        /// curves Chargy has a verifier for (see ECCurveVerifier), by SEC name.
+        /// </summary>
+        private static readonly String[] knownCurveNames = [
+            "secp192r1", "secp192k1", "secp224k1", "secp256k1",
+            "secp256r1", "secp384r1", "secp521r1",
+            "brainpoolP256r1", "brainpoolP384r1"
+        ];
+
+        /// <summary>
+        /// The SEC name of the known curve the given explicit domain parameters
+        /// describe, or null when they describe none of them.
+        ///
+        /// Field, coefficients, generator and order all have to match, and the
+        /// cofactor too where the parameters carry one. The generator in particular
+        /// is not optional: a key that brings a generator of its own on a
+        /// well-known curve can be made to verify a signature its owner never
+        /// made — CVE-2020-0601 was exactly that. The seed is ignored, because it
+        /// only documents how the curve was found and changes nothing about it.
+        /// </summary>
+        /// <param name="Parameters">Explicit elliptic curve domain parameters.</param>
+        private static String? NameOfExplicitCurve(X9ECParameters Parameters)
+        {
+
+            var curve     = Parameters.Curve;
+            var generator = Parameters.G.Normalize();
+
+            foreach (var name in knownCurveNames)
+            {
+
+                var known          = ECNamedCurveTable.GetByName(name);
+                var knownGenerator = known.G.Normalize();
+
+                if (curve.Field.Characteristic.Equals(known.Curve.Field.Characteristic) &&
+                    curve.Field.Dimension == known.Curve.Field.Dimension                &&
+                    curve.A.ToBigInteger().Equals(known.Curve.A.ToBigInteger())         &&
+                    curve.B.ToBigInteger().Equals(known.Curve.B.ToBigInteger())         &&
+                    generator.AffineXCoord.ToBigInteger().Equals(knownGenerator.AffineXCoord.ToBigInteger()) &&
+                    generator.AffineYCoord.ToBigInteger().Equals(knownGenerator.AffineYCoord.ToBigInteger()) &&
+                    Parameters.N.Equals(known.N) &&
+                    (Parameters.H is null || Parameters.H.Equals(known.H)))
+                {
+                    return name;
+                }
+
+            }
+
+            return null;
 
         }
 

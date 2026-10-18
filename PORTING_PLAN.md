@@ -1332,6 +1332,7 @@ short and reviewable, because every entry weakens the golden-file parity contrac
 |---|---|---|
 | OCMF `secp192k1` / `secp192r1` | Verified here, `InvalidPublicKey` in ChargyCore.TS | BouncyCastle carries the curves; the JavaScript library does not. Decision 9 |
 | OCMF `brainpool256r1` / `brainpool384r1` | Verified here, `InvalidPublicKey` in ChargyCore.TS | The same reason and the same direction. Decision 10 |
+| `PublicKeyParser.TryParseDER` with explicit curve parameters | Read as the curve they describe here, refused in ChargyCore.TS | Upstream's ASN.1 schema expects the curve's object identifier and cannot decode anything else. The parameters are taken only for a curve this port verifies on, and only when field, coefficients, generator, order and cofactor all match, so a well-known curve with a generator of its own still yields no key (CVE-2020-0601). Same direction as decisions 9 and 10: a key that upstream reads, this port reads the same. `PublicKeyParserTests` |
 | `SmlReader` | SML lists may nest at most 64 levels | The reader is recursive and the input is a file somebody sent us. A few kilobytes of nothing but "list of one" exhausts the stack, and in .NET that ends the process instead of raising something catchable — a JavaScript engine turns the same input into an ordinary exception, so upstream needs no limit. A real GetListRes nests about seven levels. |
 | OCMF `ocmf.lossCompensation` | Carried only when it is one: `LR` and `LU` both present | ChargyCore.TS keeps the raw `LC` object whatever it holds and separately checks the two fields before building a cable. A typed model cannot hold a malformed one, and a resistance without a unit is not a resistance — carrying it as if it were would put a number into the record that means nothing. The cable is built under exactly the same condition in both. |
 | OCMF pagination on a reading | Each reading carries **its own** document's counter | ChargyCore.TS stamps every reading with the *first* document's counter. Invisible for a single-document record and wrong for the KEBA records, where a hundred documents with a hundred different counters make up one charging session. |
@@ -1369,12 +1370,12 @@ a deviation has to be maintained forever, an upstream fix does not.
   same holds here: a file carrying two sessions shows one of them without a word about
   the other.
 
-* **`PublicKeyParser.TryParseDER` handles named curves only.** A SubjectPublicKeyInfo
-  that spells its curve out as explicit domain parameters instead of naming it by
-  object identifier yields null, and therefore `InvalidPublicKey`. Every fixture and
-  every meter seen so far names the curve, and an unreadable key shape is reported
-  honestly rather than guessed at, so this is not urgent — but it is a real gap and
-  was found by accident while testing the secp192 curves.
+* ~~**`PublicKeyParser.TryParseDER` handles named curves only.**~~ — **done.** A
+  SubjectPublicKeyInfo that spells its curve out as explicit domain parameters is now
+  read as the curve they describe, when that is a curve this port verifies on and
+  every parameter but the seed matches. Anything else still yields null rather than a
+  guess — in particular a well-known curve with a generator of its own. See the
+  deviations table above.
 
 * **No `CHANGELOG.md`.** Upstream keeps one and this port does not. It changes nothing
   the library computes, which is why it is listed rather than scheduled. (The other

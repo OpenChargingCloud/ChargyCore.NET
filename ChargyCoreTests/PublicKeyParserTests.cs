@@ -17,6 +17,10 @@
 
 #region Usings
 
+using Org.BouncyCastle.Asn1;
+using Org.BouncyCastle.Asn1.X509;
+using Org.BouncyCastle.Asn1.X9;
+
 using cloud.charging.open.chargy.Crypto;
 
 #endregion
@@ -136,6 +140,103 @@ namespace cloud.charging.open.chargy.tests
             });
 
         }
+
+        #endregion
+
+        #region A_key_with_explicit_curve_parameters_reads_like_its_named_curve(...)
+
+        [TestCase("secp192r1",       "secp192r1")]
+        [TestCase("secp192k1",       "secp192k1")]
+        [TestCase("secp224k1",       "secp224k1")]
+        [TestCase("secp256k1",       "ECDSA-secp256k1")]
+        [TestCase("secp256r1",       "ECDSA-P256")]
+        [TestCase("secp384r1",       "ECDSA-P384")]
+        [TestCase("secp521r1",       "ECDSA-P521")]
+        [TestCase("brainpoolP256r1", "brainpoolP256r1")]
+        [TestCase("brainpoolP384r1", "brainpoolP384r1")]
+        public void A_key_with_explicit_curve_parameters_reads_like_its_named_curve(String CurveName, String Algorithm)
+        {
+
+            // The same key, once naming its curve and once spelling it out. Both
+            // have to read the same, and the result has to verify what the key
+            // signed — reading the fields alone would not show that the right
+            // curve was picked.
+            var curve     = ECCurveVerifier.TryGet(CurveName)!;
+            var keyPair   = curve.Suite.GenerateKeyPair();
+            var hash      = System.Security.Cryptography.SHA256.HashData("measurement"u8.ToArray());
+            var signature = curve.Suite.Sign(hash, keyPair.PrivateKey, new SignatureOptions(Prehashed: true));
+
+            var named     = PublicKeyParser.TryParseDER(SubjectPublicKeyInfoOf(keyPair.PublicKey, new X962Parameters(ECNamedCurveTable.GetOid(CurveName))));
+            var explicit_ = PublicKeyParser.TryParseDER(SubjectPublicKeyInfoOf(keyPair.PublicKey, new X962Parameters(ECNamedCurveTable.GetByName(CurveName))));
+
+            Assert.That(explicit_,  Is.Not.Null);
+
+            Assert.Multiple(() => {
+
+                Assert.That(explicit_!.CurveName,     Is.EqualTo(CurveName));
+                Assert.That(explicit_. Algorithm,     Is.EqualTo(Algorithm));
+                Assert.That(explicit_. KeyType,       Is.EqualTo("ECC"));
+                Assert.That(explicit_. AlgorithmOID,  Is.EqualTo("1.2.840.10045.2.1"));
+                Assert.That(explicit_. ValueHEX,      Is.EqualTo(named?.ValueHEX));
+                Assert.That(named?.    CurveName,     Is.EqualTo(CurveName));
+
+                var verificationKey = ECCurveVerifier.TryGet(explicit_.CurveName)?.ParsePublicKey(explicit_.ValueHEX);
+
+                Assert.That(verificationKey?.Verify(hash, signature),  Is.True);
+
+            });
+
+        }
+
+        #endregion
+
+        #region Explicit_curve_parameters_with_a_generator_of_their_own_yield_null()
+
+        [Test]
+        public void Explicit_curve_parameters_with_a_generator_of_their_own_yield_null()
+        {
+
+            // P-256 in every parameter but the generator. Taking this for P-256
+            // would let whoever chose the generator make the key verify a
+            // signature of their own (CVE-2020-0601).
+            var p256      = ECNamedCurveTable.GetByName("secp256r1");
+            var foreign   = new X9ECParameters(p256.Curve, new X9ECPoint(p256.G.Multiply(Org.BouncyCastle.Math.BigInteger.Two), false), p256.N, p256.H);
+            var keyPair   = SignatureSuites.Get("ECDSA-P256").GenerateKeyPair();
+
+            Assert.That(PublicKeyParser.TryParseDER(SubjectPublicKeyInfoOf(keyPair.PublicKey, new X962Parameters(foreign))),  Is.Null);
+
+        }
+
+        #endregion
+
+        #region Explicit_parameters_of_an_unknown_curve_and_implicitlyCA_yield_null()
+
+        [Test]
+        public void Explicit_parameters_of_an_unknown_curve_and_implicitlyCA_yield_null()
+        {
+
+            // secp224r1 is a perfectly good curve, but none Chargy verifies on.
+            var secp224r1 = ECNamedCurveTable.GetByName("secp224r1");
+            var point     = secp224r1.G.Multiply(Org.BouncyCastle.Math.BigInteger.ValueOf(12345)).GetEncoded(false);
+            var p256Point = SignatureSuites.Get("ECDSA-P256").GenerateKeyPair().PublicKey;
+
+            Assert.Multiple(() => {
+                Assert.That(PublicKeyParser.TryParseDER(SubjectPublicKeyInfoOf(point,     new X962Parameters(secp224r1))),  Is.Null);
+                Assert.That(PublicKeyParser.TryParseDER(SubjectPublicKeyInfoOf(p256Point, new X962Parameters(DerNull.Instance))),  Is.Null);
+            });
+
+        }
+
+        #endregion
+
+        #region (private) SubjectPublicKeyInfoOf(Point, Parameters)
+
+        private static Byte[] SubjectPublicKeyInfoOf(Byte[] Point, X962Parameters Parameters)
+
+            => new SubjectPublicKeyInfo(
+                   new AlgorithmIdentifier(X9ObjectIdentifiers.IdECPublicKey, Parameters),
+                   Point
+               ).GetDerEncoded();
 
         #endregion
 
