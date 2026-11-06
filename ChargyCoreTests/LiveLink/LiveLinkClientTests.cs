@@ -190,7 +190,7 @@ namespace cloud.charging.open.chargy.tests.LiveLink
             // A loopback port the operating system has just handed back, so the
             // connection is refused at once rather than filtered and left to time
             // out. The attempt never leaves this machine either way.
-            var deadPort  = FreeLoopbackPort();
+            var deadPort  = LoopbackPorts.FreePort();
 
             var transport = new Transport(
                                 TransportType.HTTPS,
@@ -412,22 +412,6 @@ namespace cloud.charging.open.chargy.tests.LiveLink
 
             => new (LiveTransports: [ Transport ]);
 
-        /// <summary>A loopback TCP port nobody is using, asked of the operating system.</summary>
-        private static Int32 FreeLoopbackPort()
-        {
-
-            var probe = new System.Net.Sockets.TcpListener(System.Net.IPAddress.Loopback, 0);
-
-            probe.Start();
-
-            var port = ((IPEndPoint) probe.LocalEndpoint).Port;
-
-            probe.Stop();
-
-            return port;
-
-        }
-
         /// <summary>
         /// The first few updates, and then stop listening — which is what an
         /// application closing a live view does.
@@ -548,13 +532,9 @@ namespace cloud.charging.open.chargy.tests.LiveLink
                                      Int32?  EventCount)
             {
 
-                var port  = FreePort();
+                listener  = LoopbackPorts.StartHTTPListener(out var port);
 
                 URL       = $"http://127.0.0.1:{port}/live";
-
-                listener  = new HttpListener();
-                listener.Prefixes.Add($"http://127.0.0.1:{port}/");
-                listener.Start();
 
                 _ = Task.Run(async () => {
 
@@ -650,26 +630,6 @@ namespace cloud.charging.open.chargy.tests.LiveLink
 
             #endregion
 
-            #region (private, static) FreePort()
-
-            /// <summary>A TCP port nobody is using, asked of the operating system.</summary>
-            private static Int32 FreePort()
-            {
-
-                var probe = new System.Net.Sockets.TcpListener(System.Net.IPAddress.Loopback, 0);
-
-                probe.Start();
-
-                var port = ((IPEndPoint) probe.LocalEndpoint).Port;
-
-                probe.Stop();
-
-                return port;
-
-            }
-
-            #endregion
-
             #region Dispose()
 
             public void Dispose()
@@ -722,7 +682,7 @@ namespace cloud.charging.open.chargy.tests.LiveLink
                                          Int32   MessageCount)
             {
 
-                var port = FreePort();
+                var port = LoopbackPorts.FreePort();
 
                 URL      = $"ws://127.0.0.1:{port}";
 
@@ -739,26 +699,6 @@ namespace cloud.charging.open.chargy.tests.LiveLink
                         await webSocketServer.SendTextMessage(connection, Message).ConfigureAwait(false);
 
                 };
-
-            }
-
-            #endregion
-
-            #region (private, static) FreePort()
-
-            /// <summary>A TCP port nobody is using, asked of the operating system.</summary>
-            private static Int32 FreePort()
-            {
-
-                var probe = new System.Net.Sockets.TcpListener(System.Net.IPAddress.Loopback, 0);
-
-                probe.Start();
-
-                var port = ((IPEndPoint) probe.LocalEndpoint).Port;
-
-                probe.Stop();
-
-                return port;
 
             }
 

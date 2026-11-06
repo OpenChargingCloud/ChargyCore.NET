@@ -464,13 +464,9 @@ namespace cloud.charging.open.chargy.tests.IO
                                     String  Body)
             {
 
-                var port  = FreePort();
+                listener  = LoopbackPorts.StartHTTPListener(out var port);
 
                 URL       = $"http://127.0.0.1:{port}/service";
-
-                listener  = new HttpListener();
-                listener.Prefixes.Add($"http://127.0.0.1:{port}/");
-                listener.Start();
 
                 _ = Task.Run(async () => {
 
@@ -505,28 +501,6 @@ namespace cloud.charging.open.chargy.tests.IO
                     }
 
                 });
-
-            }
-
-            #endregion
-
-            #region (private, static) FreePort()
-
-            /// <summary>
-            /// A TCP port nobody is using, asked of the operating system.
-            /// </summary>
-            private static Int32 FreePort()
-            {
-
-                var probe = new System.Net.Sockets.TcpListener(IPAddress.Loopback, 0);
-
-                probe.Start();
-
-                var port = ((IPEndPoint) probe.LocalEndpoint).Port;
-
-                probe.Stop();
-
-                return port;
 
             }
 
