@@ -33,6 +33,9 @@ the port came about, phase by phase, is in [PORTING_PLAN.md](PORTING_PLAN.md).
     files carrying a record as an embedded file.
   - **Live link:** `ChargeTransparencyLiveLinkClient` follows a charging session while
     it happens, including signed log messages and document signatures.
+    Every host it connects to, the event stream's too, is looked up with the DNS
+    client it is given (or one of Hermod's own), never with the resolver of the
+    operating system.
 
 - **`cloud.charging.open.chargy.qrcodes`**, a separate package that reads records from
   QR code images (PNG, JPEG, GIF, WEBP, BMP and SVG), so that consumers who never see a

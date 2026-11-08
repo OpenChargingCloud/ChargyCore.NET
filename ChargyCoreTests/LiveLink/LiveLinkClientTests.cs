@@ -18,9 +18,11 @@
 #region Usings
 
 using System.Net;
+using System.Net.Sockets;
 using System.Text;
 
 using org.GraphDefined.Vanaheimr.Hermod;
+using org.GraphDefined.Vanaheimr.Hermod.DNS;
 using org.GraphDefined.Vanaheimr.Hermod.WebSocket;
 
 using cloud.charging.open.chargy.IO;
@@ -134,6 +136,40 @@ namespace cloud.charging.open.chargy.tests.LiveLink
             // One request, three updates — which is the whole difference between
             // this transport and polling.
             Assert.That(service.Requests, Is.EqualTo(1));
+
+        }
+
+        #endregion
+
+        #region AnEventStreamsHostIsLookedUpWithTheDNSClientOnly()
+
+        /// <summary>
+        /// The event stream is the one transport on the runtime's own HTTP client,
+        /// which asks the resolver of the operating system unless it is told
+        /// otherwise. Its host is looked up with the DNS client the live link
+        /// client was given, as on every other transport: .invalid is a name no
+        /// operating system answers (RFC 6761).
+        /// </summary>
+        [Test]
+        public async Task AnEventStreamsHostIsLookedUpWithTheDNSClientOnly()
+        {
+
+            using var station   = new RawEventStream(Payload);
+                  var dnsClient = new LoopbackDNS();
+
+            var updates = await Take(
+                                    Client(DNSClient: dnsClient).Connect(
+                                        LiveLinkFor(new Transport(TransportType.HTTPSSE, $"http://livelink.invalid:{station.Port}/live"))
+                                    ),
+                                    1
+                                );
+
+            Assert.That(updates, Has.Count.EqualTo(1), "Nothing arrived: the host was not looked up with the DNS client.");
+
+            AssertVerified(updates[0]);
+
+            Assert.That(dnsClient.Asked.Distinct(), Is.EqualTo(new[] { "livelink.invalid" }));
+            Assert.That(station.RequestHead,        Does.Contain("Host: livelink.invalid"));
 
         }
 
@@ -388,8 +424,9 @@ namespace cloud.charging.open.chargy.tests.LiveLink
         /// <summary>
         /// A live link client with the whole verification pipeline behind it.
         /// </summary>
-        private static ChargeTransparencyLiveLinkClient Client(TimeSpan?  PollingInterval  = null,
-                                                               TimeSpan?  Timeout          = null)
+        private static ChargeTransparencyLiveLinkClient Client(TimeSpan?    PollingInterval  = null,
+                                                               TimeSpan?    Timeout          = null,
+                                                               IDNSClient?  DNSClient        = null)
         {
 
             var i18n = I18NDictionary.Default();
@@ -402,7 +439,8 @@ namespace cloud.charging.open.chargy.tests.LiveLink
                            new QRCodeDecoder()
                        ),
                        PollingInterval,
-                       Timeout ?? TimeSpan.FromSeconds(10)
+                       Timeout ?? TimeSpan.FromSeconds(10),
+                       DNSClient
                    );
 
         }
@@ -451,6 +489,129 @@ namespace cloud.charging.open.chargy.tests.LiveLink
                 Is.EqualTo(SessionVerificationResult.ValidSignature),
                 VerificationReport.Format(Update.Result)
             );
+
+        }
+
+        #endregion
+
+        #region (class) RawEventStream
+
+        /// <summary>
+        /// A charging station's event stream on the loopback, spoken over a plain
+        /// socket: the HTTP listener of the runtime turns away a request whose
+        /// Host header names anything but the address it listens on. Sends one
+        /// event, and keeps the connection open, as a session not yet finished.
+        /// </summary>
+        private sealed class RawEventStream : IDisposable
+        {
+
+            private readonly TcpListener              listener  = new (System.Net.IPAddress.Loopback, 0);
+            private readonly CancellationTokenSource  stopped   = new ();
+            private readonly TaskCompletionSource<String> head  = new (TaskCreationOptions.RunContinuationsAsynchronously);
+
+            public UInt16  Port         { get; }
+
+            public String  RequestHead
+                => head.Task.IsCompletedSuccessfully ? head.Task.Result : "";
+
+            public RawEventStream(String Body)
+            {
+
+                listener.Start();
+                Port = (UInt16) ((IPEndPoint) listener.LocalEndpoint).Port;
+
+                _ = Task.Run(async () => {
+
+                    try
+                    {
+
+                        using var connection = await listener.AcceptTcpClientAsync(stopped.Token).ConfigureAwait(false);
+                        using var stream     = connection.GetStream();
+
+                        var received = new StringBuilder();
+                        var buffer   = new Byte[4096];
+
+                        while (!received.ToString().Contains("\r\n\r\n"))
+                        {
+                            var read = await stream.ReadAsync(buffer, stopped.Token).ConfigureAwait(false);
+                            if (read == 0)
+                                return;
+                            received.Append(Encoding.ASCII.GetString(buffer, 0, read));
+                        }
+
+                        head.TrySetResult(received.ToString());
+
+                        await stream.WriteAsync(Encoding.ASCII.GetBytes("HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nCache-Control: no-cache\r\n\r\n"), stopped.Token).ConfigureAwait(false);
+                        await stream.WriteAsync(Encoding.UTF8.GetBytes($"data: {Body.Replace("\n", "").Replace("\r", "")}\n\n"), stopped.Token).ConfigureAwait(false);
+                        await stream.FlushAsync(stopped.Token).ConfigureAwait(false);
+
+                        await Task.Delay(System.Threading.Timeout.InfiniteTimeSpan, stopped.Token).ConfigureAwait(false);
+
+                    }
+                    catch (Exception)
+                    {
+                        // Stopped, or the client went away.
+                    }
+
+                });
+
+            }
+
+            public void Dispose()
+            {
+                stopped.Cancel();
+                listener.Stop();
+            }
+
+        }
+
+        #endregion
+
+        #region (class) LoopbackDNS
+
+        /// <summary>
+        /// A DNS client that names the loopback for every host, and records what it was asked.
+        /// </summary>
+        private sealed class LoopbackDNS : IDNSClient
+        {
+
+            private static readonly DNSServerConfig origin = new (IPv4Address.Localhost, IPPort.Parse(53));
+
+            private readonly List<String> asked = [];
+
+            public IReadOnlyList<String> Asked
+            {
+                get
+                {
+                    lock (asked)
+                        return [.. asked];
+                }
+            }
+
+            public Task<DNSInfo> Query(DomainName DomainName, IEnumerable<DNSResourceRecordTypes> ResourceRecordTypes, TimeSpan? Timeout = null,
+                                       Boolean? RecursionDesired = true, Boolean? ForceUpdate = false, CancellationToken CancellationToken = default)
+                => Query(DNSServiceName.Parse(DomainName.FullName), ResourceRecordTypes, Timeout, RecursionDesired, ForceUpdate, CancellationToken);
+
+            public Task<DNSInfo> Query(DNSServiceName DNSServiceName, IEnumerable<DNSResourceRecordTypes> ResourceRecordTypes, TimeSpan? Timeout = null,
+                                       Boolean? RecursionDesired = true, Boolean? ForceUpdate = false, CancellationToken CancellationToken = default)
+            {
+
+                lock (asked)
+                    asked.Add(DNSServiceName.FullName.TrimEnd('.'));
+
+                IDNSResourceRecord[] answers = ResourceRecordTypes.Contains(DNSResourceRecordTypes.A)
+                                                   ? [ new A(DNSServiceName, DNSQueryClasses.IN, TimeSpan.FromMinutes(1), IPv4Address.Localhost) ]
+                                                   : [];
+
+                return Task.FromResult(new DNSInfo(origin, 0, true, false, true, true, DNSResponseCodes.NoError,
+                                                   answers, [], [], true, false, TimeSpan.FromSeconds(5), TimeSpan.Zero));
+
+            }
+
+            public void Dispose() { }
+
+            public ValueTask DisposeAsync()
+                => ValueTask.CompletedTask;
 
         }
 

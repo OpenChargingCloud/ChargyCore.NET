@@ -275,17 +275,26 @@ namespace cloud.charging.open.chargy.LiveLink
         ///
         /// The one-time password is put into the request here rather than by the
         /// client, in exactly the header and format Hermod would have used.
+        ///
+        /// The host is looked up as on the other transports: with the DNS client
+        /// given, or else one of Hermod's own, which asks the name servers of the
+        /// network configuration itself - never with the resolver of the operating
+        /// system, which the runtime's client asks unless it is told otherwise.
+        /// Hermod's NameResolution connects it, and so it goes through no proxy.
         /// </summary>
         private async IAsyncEnumerable<LiveLinkUpdate> Stream(Transport                                   Transport,
                                                               String                                      Endpoint,
                                                               [EnumeratorCancellation] CancellationToken  CancellationToken)
         {
 
-            using var httpClient = new HttpClient(
-                                       new HttpClientHandler {
-                                           ServerCertificateCustomValidationCallback = null
-                                       }
-                                   ) {
+            using var ownDNSClient = DNSClient is null
+                                         ? new DNSClient()
+                                         : null;
+
+            // The system's validation of the server's certificate, as before.
+            using var httpClient   = new HttpClient(
+                                         NameResolution.HTTPHandler(DNSClient ?? ownDNSClient)
+                                     ) {
                                        // The stream is the answer, and it lasts as
                                        // long as the charging session does. Only
                                        // establishing it is given a deadline.
