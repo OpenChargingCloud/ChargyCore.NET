@@ -613,6 +613,9 @@ namespace cloud.charging.open.chargy.tests.LiveLink
             public ValueTask DisposeAsync()
                 => ValueTask.CompletedTask;
 
+            public override String ToString()
+                => nameof(LoopbackDNS);
+
         }
 
         #endregion
