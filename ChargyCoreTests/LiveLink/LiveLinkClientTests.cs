@@ -147,8 +147,10 @@ namespace cloud.charging.open.chargy.tests.LiveLink
         /// The event stream is the one transport on the runtime's own HTTP client,
         /// which asks the resolver of the operating system unless it is told
         /// otherwise. Its host is looked up with the DNS client the live link
-        /// client was given, as on every other transport: .invalid is a name no
-        /// operating system answers (RFC 6761).
+        /// client was given, as on every other transport: .test is a name no
+        /// operating system answers, and one the DNS client is asked for as any
+        /// other (RFC 6761 §6.2) - unlike .invalid, which is answered "no such
+        /// name" without asking it (§6.4).
         /// </summary>
         [Test]
         public async Task AnEventStreamsHostIsLookedUpWithTheDNSClientOnly()
@@ -159,7 +161,7 @@ namespace cloud.charging.open.chargy.tests.LiveLink
 
             var updates = await Take(
                                     Client(DNSClient: dnsClient).Connect(
-                                        LiveLinkFor(new Transport(TransportType.HTTPSSE, $"http://livelink.invalid:{station.Port}/live"))
+                                        LiveLinkFor(new Transport(TransportType.HTTPSSE, $"http://livelink.test:{station.Port}/live"))
                                     ),
                                     1
                                 );
@@ -168,8 +170,8 @@ namespace cloud.charging.open.chargy.tests.LiveLink
 
             AssertVerified(updates[0]);
 
-            Assert.That(dnsClient.Asked.Distinct(), Is.EqualTo(new[] { "livelink.invalid" }));
-            Assert.That(station.RequestHead,        Does.Contain("Host: livelink.invalid"));
+            Assert.That(dnsClient.Asked.Distinct(), Is.EqualTo(new[] { "livelink.test" }));
+            Assert.That(station.RequestHead,        Does.Contain("Host: livelink.test"));
 
         }
 
