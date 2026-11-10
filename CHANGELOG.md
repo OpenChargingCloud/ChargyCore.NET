@@ -18,9 +18,9 @@ the port came about, phase by phase, is in [PORTING_PLAN.md](PORTING_PLAN.md).
 ### Added
 
 - **The port of [ChargyCore.TS](https://github.com/OpenChargingCloud/ChargyCore.TS)**,
-  following upstream up to `29d1d01` (v0.16.1 and the reading of live link keys after
-  it). Every one of the shared test fixtures is byte-identical with upstream, and the
-  verification reports are compared line by line against upstream's golden files.
+  following upstream up to `90250de` (v0.17.0 and the verification of POI-bound meter
+  keys after it). Every one of the shared test fixtures is byte-identical with upstream,
+  and the verification reports are compared line by line against upstream's golden files.
 
   - **Formats:** Alfen, Bauer (2 variants), ChargePoint (2 variants), EDL40 and
     ISA-EDL40 SML, EMH, GDF, Mennekes XML, OCMF v1.1 to v1.4 including the Bonner
@@ -33,6 +33,17 @@ the port came about, phase by phase, is in [PORTING_PLAN.md](PORTING_PLAN.md).
     files carrying a record as an embedded file.
   - **Live link:** `ChargeTransparencyLiveLinkClient` follows a charging session while
     it happens, including signed log messages and document signatures.
+    `LiveLink.LiveSessionContinuity` checks that a live session document is the next one
+    after the one accepted before — the exact predecessor, the same session, EVSE, meter
+    and operator, readings only ever added — and that it is the operator's own by keys
+    the caller obtained independently, with an old-key co-signature across a key change.
+  - **Keys someone vouches for:** `Formats.OCMF.MeterKeyVerification` reads the original
+    OCMF documents of a session anew with a meter key an authorized caller hands over,
+    now or at the times of the readings, and reports a container key that differs
+    instead of replacing it. `Formats.OCMF.OCMFSessionPriceContext` finds the one signed
+    start of a session and compares a declared price with its tariff texts in exact
+    decimal cents. `DocumentSignatures.VerifyDocumentSignaturesWithKeys` verifies a
+    document with keys it does not list itself.
     Every host it connects to, the event stream's too, is looked up with the DNS
     client it is given (or one of Hermod's own), never with the resolver of the
     operating system.

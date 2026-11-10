@@ -288,6 +288,32 @@ out of their own charging session. ChargyCore's tests check Hermod against the
 reference implementation's own vectors.
 
 
+## Readings checked with a key someone vouches for
+
+A charge transparency file brings the meter's key along, which proves only that whoever
+wrote the file had it. Where a roaming network vouches for the key of an EVSE's meter, the
+caller verifies that evidence itself and hands the key over as a `MeterKeyBinding` — no
+file can make one, whatever fields it carries:
+
+```csharp
+using cloud.charging.open.chargy.Formats.OCMF;
+
+var result = MeterKeyVerification.VerifyOCMFSessionWithMeterKey(session, binding);
+
+if (result.Status == MeterKeyVerificationStatus.Verified)
+    Console.WriteLine($"{result.SignatureCount} original documents verified with the EVSE's key");
+```
+
+Every original OCMF document is read anew with exactly that key; its signed meter and
+EVSE are compared with the binding, and what the session displays with what the documents
+say. A key in the container that differs is reported as `KeyConflict`, never replaced.
+`VerifyHistoricalOCMFSession` checks each document with the key that was the meter's at
+the times of its readings, `OCMFSessionPriceContext` binds a price to the one signed
+start of a session and compares its rates with the signed tariff texts in exact cents,
+and `LiveLink.LiveSessionContinuity` accepts a live session document only as the next one
+after the one before — and as the operator's own only by keys obtained independently.
+
+
 ## Related projects
 
 - [Chargy Core TS](https://github.com/OpenChargingCloud/ChargyCore.TS), the TypeScript implementation this port is derived from
@@ -365,12 +391,12 @@ endings by default. [`.gitattributes`](.gitattributes) prevents that, and the Wi
 is what proves it — before building, every tracked file on disk is compared against the
 bytes the repository holds. The GitHub Windows image runs with `core.autocrlf=true` and
 does rewrite the repository's other files — 199 of them the last time the leg reported a
-count; all 256 fixtures come through untouched.
+count; all 265 fixtures come through untouched.
 
 A [nightly workflow](.github/workflows/nightly.yml) runs the same suite again when nobody
 pushed, because Styx and Hermod are not pinned — they are sibling checkouts of master, so a
 breaking change there is a red night with nothing in this repository having moved. It also
-compares all 256 fixtures with `ChargyCore.TS` byte for byte, which is the one half of the
+compares all 265 fixtures with `ChargyCore.TS` byte for byte, which is the one half of the
 parity contract neither test suite can check on its own: each only ever sees its own copy.
 
 All cryptography is provided by [BouncyCastle](https://www.bouncycastle.org/) — ECDSA over

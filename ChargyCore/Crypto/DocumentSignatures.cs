@@ -311,6 +311,37 @@ namespace cloud.charging.open.chargy.Crypto
 
         #endregion
 
+        #region VerifyDocumentSignaturesWithKeys(Document, PublicKeys)
+
+        /// <summary>
+        /// Verify every signature a document carries over itself, with keys the
+        /// caller chose rather than those the document lists.
+        ///
+        /// A document that names its own keys proves only that whoever wrote it
+        /// held them. Where it matters who that was — the operator a roaming
+        /// network vouches for, say — the keys have to come from somewhere the
+        /// document cannot reach, and the ones it lists are not looked at at all.
+        /// </summary>
+        /// <param name="Document">A JSON document, as it was read.</param>
+        /// <param name="PublicKeys">The keys that may have signed it.</param>
+        public static DocumentSignaturesResult VerifyDocumentSignaturesWithKeys(JObject                         Document,
+                                                                                IEnumerable<DocumentPublicKey>  PublicKeys)
+        {
+
+            if (Document["signatures"] is not JArray signatures || signatures.Count == 0)
+                return new DocumentSignaturesResult(DocumentSignaturesStatus.Unsigned, []);
+
+            return VerifySignaturesOf(
+                       Document,
+                       signatures,
+                       [ .. PublicKeys ],
+                       AsStringArray(Document["keyIdGeneration"]) ?? [ .. DefaultKeyIdGeneration ]
+                   );
+
+        }
+
+        #endregion
+
         #region VerifyEmbeddedSignatures(Embedded, EnclosingDocument)
 
         /// <summary>

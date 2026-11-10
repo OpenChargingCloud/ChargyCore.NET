@@ -22,7 +22,7 @@ Source inventory of ChargyCore.TS:
 | Data model & helpers | `interfaces/*`, `ACrypt`, `SignatureCrypto`, `OCPI` | ~4,900 |
 | **Total source** | 34 files | **~23,600** |
 | Tests | 28 spec files | ~4,300 |
-| Test fixtures | 256 files, of which **25 are `*.expected.txt` golden reports** | — |
+| Test fixtures | 265 files, of which **25 are `*.expected.txt` golden reports** | — |
 
 Expected C# size: roughly 28,000–35,000 LOC, because the C# data model uses the
 GraphDefined house style (`ToJSON()` / `TryParse()` per class) instead of bare
@@ -382,7 +382,8 @@ Git repo, AGPL `LICENSE`, `README.md`, `SECURITY.md`, `CONTRIBUTING.md`,
 `i18n.json` + `validationRules.json` as embedded resources, all fixtures copied
 into `ChargyCoreTests/TestData/` — 203 of them at the time, 204 since the v0.12.0
 sync in `f3bab3c`, 236 since v0.13.0 brought the OCMF-Test-01 live link series, and
-256 since v0.16.1 regenerated it (see §7b).
+256 since v0.16.1 regenerated it, and 265 since `90250de` brought the POI session and
+live session documents (see §7b).
 
 Two additions over the original plan:
 
@@ -1271,6 +1272,47 @@ verbatim as well.
 The live link tests followed upstream's own lesson of 0.16.0: they no longer name what the
 generator produces — twenty readings, seventeen by the operator, a fixed `created` — but
 count the documents and compare against what a document states. 663 tests pass.
+
+### `b352653`…`90250de` — meter keys someone vouches for, a price bound to the start, and live session continuity
+
+Baseline moves to `90250de`: upstream v0.17.0 and the verification of POI-bound meter keys
+after it. All 265 fixtures are byte-identical with upstream again, compared against the
+repository blobs; the nine new ones are the POI session containers and their provenance,
+copied upstream from ChargyWebApp `97da24d`, and the four documents of a live session from
+waiting to completed. Every key in them is a test key.
+
+* **`90250de` — `MeterKeyVerification.ts`** ✅ **ported** as
+  `Formats.OCMF.MeterKeyVerification`. A `MeterKeyBinding` is what an authorized caller
+  hands over after verifying its own trust evidence; nothing in a file can make one.
+  Every original OCMF document is read anew with exactly that key, its signed `MS`, `CT`
+  and `CI` compared with the binding, and what the session displays with what the
+  documents say; validation results the session carries are not looked at. A container
+  key that differs is `KeyConflict`, never replaced. `VerifyHistoricalOCMFSession` checks
+  each document with the one binding covering its reading times.
+* **`90250de` — `SessionPriceContext.ts`** ✅ **ported** as
+  `Formats.OCMF.OCMFSessionPriceContext`: the one signed start, the SHA-256 of its exact
+  bytes and its tariff texts, a comparison of declared gross rates in exact decimal cents,
+  and the check of the start document alone.
+* **`90250de` — `LiveSessionContinuity.ts`** ✅ **ported** as
+  `LiveLink.LiveSessionContinuity`, with `LiveSessionException` for what upstream throws as
+  an `Error`. The fixtures' `updates` references were computed upstream, so a transition
+  accepted here is also proof that both canonicalize a document to the same bytes.
+* **`90250de` — `verifyDocumentSignaturesWithKeys`** ✅ **ported** as
+  `DocumentSignatures.VerifyDocumentSignaturesWithKeys`.
+* **`90250de` — the crypto details of an OCMF reading show its own result** rather than the
+  session's. No counterpart: this port renders nothing, and a reading carries its own
+  `Result` already.
+* **`b352653`** — node-canvas rasterizes an SVG QR code large enough to read. No
+  counterpart: `cloud.charging.open.chargy.qrcodes` reads images its own way.
+* **`9befc3a`, `97a6f4b`** — a release and npm updates. No counterpart.
+
+Three differences, all of shape rather than substance. The checks are synchronous, as
+`OCMFFormat.TryParse` is, and a `CancellationToken` takes the place of an `AbortSignal`.
+Times are `DateTimeOffset`s rather than milliseconds since 1970. And a session whose
+readings a test wants changed is built anew, because the readings of this port cannot be
+changed in place. One test more than upstream: a historical binding handed over directly
+covers only the reading times it names — upstream never reaches that check from its tests,
+because its historical check selects covering bindings first. 699 tests pass.
 
 ---
 
