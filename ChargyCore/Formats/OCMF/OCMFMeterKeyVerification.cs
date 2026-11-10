@@ -75,7 +75,7 @@ namespace cloud.charging.open.chargy.Formats.OCMF
     /// <summary>
     /// Whether a result says the key was the meter's when the readings were taken.
     /// </summary>
-    public enum HistoricalAssociation
+    public enum OCMFHistoricalAssociation
     {
 
         /// <summary>Nothing is said about the time of the readings.</summary>
@@ -90,7 +90,7 @@ namespace cloud.charging.open.chargy.Formats.OCMF
     /// <summary>
     /// Which part of a charging session the original readings cover.
     /// </summary>
-    public enum ReadingPhase
+    public enum OCMFReadingPhase
     {
 
         /// <summary>A single start reading, before an end reading exists.</summary>
@@ -114,12 +114,12 @@ namespace cloud.charging.open.chargy.Formats.OCMF
     /// <param name="Value">The key.</param>
     /// <param name="Encodings">How the key is encoded, innermost first, e.g. SubjectPublicKeyInfo, DER, base64.</param>
     /// <param name="Algorithm">The key type, e.g. "ECDSA-secp256r1".</param>
-    public sealed record MeterKey(String                 Id,
-                                  String                 IdScheme,
-                                  String                 CanonicalId,
-                                  String                 Value,
-                                  IReadOnlyList<String>  Encodings,
-                                  String                 Algorithm);
+    public sealed record AuthorizedMeterKey(String                 Id,
+                                            String                 IdScheme,
+                                            String                 CanonicalId,
+                                            String                 Value,
+                                            IReadOnlyList<String>  Encodings,
+                                            String                 Algorithm);
 
 
     /// <summary>
@@ -135,16 +135,16 @@ namespace cloud.charging.open.chargy.Formats.OCMF
     /// <param name="TreeRoot">The root of the tree the commit belongs to.</param>
     /// <param name="KeyStatementDigest">The digest of the key statement.</param>
     /// <param name="MeasurementTimes">For a historical attestation: the reading times it covers.</param>
-    public sealed record MeterKeyEvidence(DateTimeOffset                 VerifiedAt,
-                                          DateTimeOffset                 ValidUntil,
-                                          MeterKeyAssociation            Association,
-                                          String                         RoamingNetworkId,
-                                          String                         RoamingNetworkOperatorId,
-                                          String                         CommitId,
-                                          UInt64                         Revision,
-                                          String                         TreeRoot,
-                                          String                         KeyStatementDigest,
-                                          IReadOnlyList<DateTimeOffset>?  MeasurementTimes   = null);
+    public sealed record MeterKeyBindingEvidence(DateTimeOffset                  VerifiedAt,
+                                                 DateTimeOffset                  ValidUntil,
+                                                 MeterKeyAssociation             Association,
+                                                 String                          RoamingNetworkId,
+                                                 String                          RoamingNetworkOperatorId,
+                                                 String                          CommitId,
+                                                 UInt64                          Revision,
+                                                 String                          TreeRoot,
+                                                 String                          KeyStatementDigest,
+                                                 IReadOnlyList<DateTimeOffset>?  MeasurementTimes   = null);
 
 
     /// <summary>
@@ -162,12 +162,12 @@ namespace cloud.charging.open.chargy.Formats.OCMF
     /// <param name="MeterSerialNumber">The serial number the meter signs its readings with, OCMF "MS".</param>
     /// <param name="Key">The key.</param>
     /// <param name="Evidence">Where the binding comes from, and how long it may be relied on.</param>
-    public sealed record MeterKeyBinding(String            EVSEId,
-                                         String            ChargingStationId,
-                                         String            MeterId,
-                                         String            MeterSerialNumber,
-                                         MeterKey          Key,
-                                         MeterKeyEvidence  Evidence);
+    public sealed record MeterKeyBinding(String                   EVSEId,
+                                         String                   ChargingStationId,
+                                         String                   MeterId,
+                                         String                   MeterSerialNumber,
+                                         AuthorizedMeterKey       Key,
+                                         MeterKeyBindingEvidence  Evidence);
 
 
     /// <summary>
@@ -225,10 +225,10 @@ namespace cloud.charging.open.chargy.Formats.OCMF
         /// Whether the result says the key was the meter's when the readings were
         /// taken: only a historical attestation whose readings all verified does.
         /// </summary>
-        public HistoricalAssociation           HistoricalAssociation    { get; }
+        public OCMFHistoricalAssociation       HistoricalAssociation    { get; }
 
         /// <summary>Which part of the charging session the readings cover.</summary>
-        public ReadingPhase                    ReadingPhase             { get; }
+        public OCMFReadingPhase                ReadingPhase             { get; }
 
         /// <summary>The binding the readings were checked against.</summary>
         public MeterKeyBinding                 Binding                  { get; }
@@ -246,7 +246,7 @@ namespace cloud.charging.open.chargy.Formats.OCMF
         internal BoundOCMFResult(MeterKeyVerificationStatus  Status,
                                  String                      Detail,
                                  MeterKeyBinding             Binding,
-                                 ReadingPhase                ReadingPhase,
+                                 OCMFReadingPhase            ReadingPhase,
                                  Int32                       SignatureCount    = 0,
                                  Int32                       MeasurementCount  = 0,
                                  ChargeTransparencyRecord?   Record            = null,
@@ -266,8 +266,8 @@ namespace cloud.charging.open.chargy.Formats.OCMF
                                           SignaturesValid &&
                                           (Status == MeterKeyVerificationStatus.Verified || Status == MeterKeyVerificationStatus.KeyConflict)
 
-                                              ? HistoricalAssociation.RNOAttestedAtReadingTimes
-                                              : HistoricalAssociation.NotProven;
+                                              ? OCMFHistoricalAssociation.RNOAttestedAtReadingTimes
+                                              : OCMFHistoricalAssociation.NotProven;
 
         }
 
@@ -581,7 +581,7 @@ namespace cloud.charging.open.chargy.Formats.OCMF
                                                CancellationToken      CancellationToken)
         {
 
-            var readingPhase = ReadingPhase.Partial;
+            var readingPhase = OCMFReadingPhase.Partial;
 
             BoundOCMFResult Finish(MeterKeyVerificationStatus  Status,
                                    String                      Detail,
@@ -732,9 +732,9 @@ namespace cloud.charging.open.chargy.Formats.OCMF
 
             }
 
-            readingPhase = transactions.Contains("B") && transactions.Contains("E") ? ReadingPhase.Complete
-                         : count == 1 && transactions.Contains("B")                 ? ReadingPhase.StartOnly
-                         :                                                            ReadingPhase.Partial;
+            readingPhase = transactions.Contains("B") && transactions.Contains("E") ? OCMFReadingPhase.Complete
+                         : count == 1 && transactions.Contains("B")                 ? OCMFReadingPhase.StartOnly
+                         :                                                            OCMFReadingPhase.Partial;
 
             if (count == 0 || parsedDocuments.Count != material.Documents.Count)
                 return Finish(MeterKeyVerificationStatus.Unsupported,

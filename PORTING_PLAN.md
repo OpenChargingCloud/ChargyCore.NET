@@ -1306,6 +1306,13 @@ waiting to completed. Every key in them is a test key.
   counterpart: `cloud.charging.open.chargy.qrcodes` reads images its own way.
 * **`9befc3a`, `97a6f4b`** — a release and npm updates. No counterpart.
 
+The names say what upstream leaves inline or generic: the key and its evidence are
+`AuthorizedMeterKey` and `MeterKeyBindingEvidence`, and the enums of a result
+`OCMFReadingPhase` and `OCMFHistoricalAssociation`. `MeterKey` was the Modbus/TLS meter's
+own name for its signing key, and `MeterKeyEvidence` WWCP_POI's for the evidence of a
+roaming network, both in code that uses this library too; the first `a1a4886` had them, and
+the meter's tests no longer compiled against it.
+
 Three differences, all of shape rather than substance. The checks are synchronous, as
 `OCMFFormat.TryParse` is, and a `CancellationToken` takes the place of an `AbortSignal`.
 Times are `DateTimeOffset`s rather than milliseconds since 1970. And a session whose

@@ -63,7 +63,7 @@ namespace cloud.charging.open.chargy.tests.Formats
                                                                          ChargingStationId:  "DE*POI*S1",
                                                                          MeterId:            "DE*POI*M1",
                                                                          MeterSerialNumber:  metadata["meterSerial"]!.Value<String>()!,
-                                                                         Key:                new MeterKey(
+                                                                         Key:                new AuthorizedMeterKey(
                                                                                                  Id:           metadata["meterKeyId"]!.Value<String>()!,
                                                                                                  IdScheme:     "sha256-spki",
                                                                                                  CanonicalId:  "provided-by-authorized-caller",
@@ -71,7 +71,7 @@ namespace cloud.charging.open.chargy.tests.Formats
                                                                                                  Encodings:    [ "SubjectPublicKeyInfo", "DER", "base64" ],
                                                                                                  Algorithm:    "ECDSA-secp256r1"
                                                                                              ),
-                                                                         Evidence:           new MeterKeyEvidence(
+                                                                         Evidence:           new MeterKeyBindingEvidence(
                                                                                                  VerifiedAt:                at,
                                                                                                  ValidUntil:                Date(metadata["attestationsValidUntil"]!),
                                                                                                  Association:               MeterKeyAssociation.CurrentSnapshot,
@@ -100,9 +100,9 @@ namespace cloud.charging.open.chargy.tests.Formats
                 Assert.That(result.Status,                 Is.EqualTo(MeterKeyVerificationStatus.Verified), result.Detail);
                 Assert.That(result.SignaturesValid,        Is.True);
                 Assert.That(result.SignatureCount,         Is.EqualTo(2));
-                Assert.That(result.ReadingPhase,           Is.EqualTo(ReadingPhase.Complete));
+                Assert.That(result.ReadingPhase,           Is.EqualTo(OCMFReadingPhase.Complete));
                 Assert.That(result.MeasurementCount,       Is.EqualTo(2));
-                Assert.That(result.HistoricalAssociation,  Is.EqualTo(HistoricalAssociation.NotProven));
+                Assert.That(result.HistoricalAssociation,  Is.EqualTo(OCMFHistoricalAssociation.NotProven));
                 // ChargyCore.TS checks that the first reading of the record read
                 // anew carries its crypto method, so that its details can be shown;
                 // here a reading carries its own result instead.
@@ -254,7 +254,7 @@ namespace cloud.charging.open.chargy.tests.Formats
                 Assert.That(result.Status,          Is.EqualTo(HistoricalOCMFStatus.Verified));
                 Assert.That(result.SignatureCount,  Is.EqualTo(2));
                 Assert.That(result.Checks.Select(check => check.HistoricalAssociation),
-                            Is.All.EqualTo(HistoricalAssociation.RNOAttestedAtReadingTimes));
+                            Is.All.EqualTo(OCMFHistoricalAssociation.RNOAttestedAtReadingTimes));
             });
 
         }
@@ -286,7 +286,7 @@ namespace cloud.charging.open.chargy.tests.Formats
 
             Assert.Multiple(() => {
                 Assert.That(result.Status,                 Is.EqualTo(MeterKeyVerificationStatus.IdentityConflict), result.Detail);
-                Assert.That(result.HistoricalAssociation,  Is.EqualTo(HistoricalAssociation.NotProven));
+                Assert.That(result.HistoricalAssociation,  Is.EqualTo(OCMFHistoricalAssociation.NotProven));
             });
 
         }
@@ -300,7 +300,7 @@ namespace cloud.charging.open.chargy.tests.Formats
             Assert.Multiple(() => {
                 Assert.That(result.SignaturesValid,  Is.False);
                 Assert.That(result.Checks.Select(check => check.HistoricalAssociation),
-                            Has.Some.EqualTo(HistoricalAssociation.NotProven));
+                            Has.Some.EqualTo(OCMFHistoricalAssociation.NotProven));
             });
 
         }
