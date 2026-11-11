@@ -97,7 +97,7 @@ jobs:
 
       - uses: actions/setup-dotnet@v6
         with:
-          dotnet-version: '10.0.x'
+          dotnet-version: '11.0.x'
 
       # .gitattributes marks the whole TestData tree as "-text" so that no
       # end-of-line heuristic can reach a signed fixture. This is what says so

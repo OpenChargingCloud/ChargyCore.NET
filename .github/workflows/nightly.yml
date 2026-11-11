@@ -68,7 +68,7 @@ jobs:
 
       - uses: actions/setup-dotnet@v6
         with:
-          dotnet-version: '10.0.x'
+          dotnet-version: '11.0.x'
 
       # Repeated from the gate rather than left to it, because what this step
       # watches can also change without a push: the runner images. The Windows
