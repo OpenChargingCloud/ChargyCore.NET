@@ -19,6 +19,8 @@
 
 using Newtonsoft.Json.Linq;
 
+using org.GraphDefined.Vanaheimr.Illias;
+
 #endregion
 
 namespace cloud.charging.open.chargy
@@ -71,9 +73,9 @@ namespace cloud.charging.open.chargy
                 return false;
 
             Cost = new Cost(
-                       JSON["amount"]?.Value<Decimal>() ?? 0,
+                       JSON["amount"]?.AsDecimal() ?? 0,
                        unit,
-                       JSON["cost"]?.  Value<Decimal>() ?? 0
+                       JSON["cost"]?.  AsDecimal() ?? 0
                    );
 
             return true;
@@ -142,7 +144,7 @@ namespace cloud.charging.open.chargy
             if (JSON["cost"] is null)
                 return false;
 
-            FlatCost = new FlatCost(JSON["cost"]!.Value<Decimal>());
+            FlatCost = new FlatCost(JSON["cost"]!.AsDecimal());
 
             return true;
 
@@ -252,7 +254,7 @@ namespace cloud.charging.open.chargy
                 FlatCost.TryParse(flatJSON, out flat);
 
             ChargingCosts = new ChargingCosts(
-                                JSON["total"]?.Value<Decimal>() ?? 0,
+                                JSON["total"]?.AsDecimal() ?? 0,
                                 currency,
                                 ParseCost(JSON["reservation"]),
                                 ParseCost(JSON["energy"]),

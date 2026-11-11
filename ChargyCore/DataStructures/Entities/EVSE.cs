@@ -77,8 +77,8 @@ namespace cloud.charging.open.chargy
         {
 
             Cable = new Cable(
-                        JSON["length"]?.            Value<Decimal>(),
-                        JSON["resistance"]?.        Value<Decimal>(),
+                        JSON["length"]?.            AsDecimal(),
+                        JSON["resistance"]?.        AsDecimal(),
                         JSON["resistanceUnit"]?.    Value<String>(),
                         JSON["lossCompensation"]?.  Value<String>(),
                         JSON["lossCompensationId"]?.Value<String>()

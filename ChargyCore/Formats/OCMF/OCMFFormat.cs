@@ -943,7 +943,7 @@ namespace cloud.charging.open.chargy.Formats.OCMF
                                        String   Key)
 
             => JSON[Key]?.Type is JTokenType.Integer or JTokenType.Float
-                   ? JSON[Key]!.Value<Decimal>()
+                   ? JSON[Key]!.AsDecimal()
                    : null;
 
         #endregion

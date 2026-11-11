@@ -105,7 +105,7 @@ namespace cloud.charging.open.chargy
 
             Taxes = new Taxes(
                         id,
-                        JSON["percentage"]?.Value<Decimal>() ?? 0,
+                        JSON["percentage"]?.AsDecimal() ?? 0,
                         JSON["description"] is JObject descriptionJSON
                             ? I18NString.Parse(descriptionJSON)
                             : null,
@@ -206,7 +206,7 @@ namespace cloud.charging.open.chargy
 
             PriceComponent = new PriceComponent(
                                  type,
-                                 JSON["price"]?.    Value<Decimal>() ?? 0,
+                                 JSON["price"]?.    AsDecimal() ?? 0,
                                  JSON["step_size"]?.Value<Int64>()   ?? 0
                              );
 
@@ -347,10 +347,10 @@ namespace cloud.charging.open.chargy
                                     JSON["end_time"]?.    Value<String>(),
                                     JSON["start_date"]?.  Value<String>(),
                                     JSON["end_date"]?.    Value<String>(),
-                                    JSON["min_kwh"]?.     Value<Decimal>(),
-                                    JSON["max_kwh"]?.     Value<Decimal>(),
-                                    JSON["min_power"]?.   Value<Decimal>(),
-                                    JSON["max_power"]?.   Value<Decimal>(),
+                                    JSON["min_kwh"]?.     AsDecimal(),
+                                    JSON["max_kwh"]?.     AsDecimal(),
+                                    JSON["min_power"]?.   AsDecimal(),
+                                    JSON["max_power"]?.   AsDecimal(),
                                     JSON["min_duration"]?.Value<Int64>(),
                                     JSON["max_duration"]?.Value<Int64>(),
                                     daysOfWeek

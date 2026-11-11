@@ -717,7 +717,7 @@ namespace cloud.charging.open.chargy.Formats.BSM
 
             => JSON?[Key]?.Type == JTokenType.Integer ||
                JSON?[Key]?.Type == JTokenType.Float
-                   ? JSON[Key]!.Value<Decimal>()
+                   ? JSON[Key]!.AsDecimal()
                    : null;
 
         /// <summary>An object property, or null when it is absent or not an object.</summary>

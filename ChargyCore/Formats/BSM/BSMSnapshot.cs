@@ -19,6 +19,8 @@
 
 using Newtonsoft.Json.Linq;
 
+using org.GraphDefined.Vanaheimr.Illias;
+
 using cloud.charging.open.chargy.Crypto;
 
 #endregion
@@ -68,7 +70,7 @@ namespace cloud.charging.open.chargy.Formats.BSM
 
             => Value?.Type == JTokenType.Integer ||
                Value?.Type == JTokenType.Float
-                   ? (Int64) Value.Value<Decimal>()
+                   ? (Int64) Value.AsDecimal()
                    : 0;
 
         #endregion
@@ -80,7 +82,7 @@ namespace cloud.charging.open.chargy.Formats.BSM
 
             => Value?.Type == JTokenType.Integer ||
                Value?.Type == JTokenType.Float
-                   ? Value.Value<Decimal>()
+                   ? Value.AsDecimal()
                    : null;
 
         #endregion

@@ -69,7 +69,7 @@ namespace cloud.charging.open.chargy.Formats.QIDigital
 
             => JSON?[Key]?.Type == JTokenType.Integer ||
                JSON?[Key]?.Type == JTokenType.Float
-                   ? JSON[Key]!.Value<Decimal>()
+                   ? JSON[Key]!.AsDecimal()
                    : null;
 
         /// <summary>An array of strings, or an empty list when it is absent.</summary>

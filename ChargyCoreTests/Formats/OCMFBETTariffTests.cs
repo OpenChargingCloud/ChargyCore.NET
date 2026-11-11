@@ -23,6 +23,8 @@ using Newtonsoft.Json.Linq;
 
 using Org.BouncyCastle.Security;
 
+using org.GraphDefined.Vanaheimr.Illias;
+
 using cloud.charging.open.chargy.Formats.OCMF;
 
 #endregion
@@ -433,7 +435,7 @@ namespace cloud.charging.open.chargy.tests.Formats
                 case JTokenType.Integer:
                 case JTokenType.Float:
                     Assert.That(Actual!.Type is JTokenType.Integer or JTokenType.Float, Is.True, $"{Path} should be a number, but is '{Actual}'");
-                    Assert.That(Actual.Value<Decimal>(), Is.EqualTo(Expected.Value<Decimal>()), $"{Path}");
+                    Assert.That(Actual.AsDecimal(), Is.EqualTo(Expected.AsDecimal()), $"{Path}");
                     return;
 
                 default:

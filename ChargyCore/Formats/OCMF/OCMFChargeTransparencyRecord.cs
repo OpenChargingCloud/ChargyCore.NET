@@ -94,13 +94,13 @@ namespace cloud.charging.open.chargy.Formats.OCMF
             }
 
             LossCompensation = new OCMFLossCompensation(
-                                   resistance.Value<Decimal>(),
+                                   resistance.AsDecimal(),
                                    unitName,
                                    JSON["LN"]?.Type == JTokenType.String
                                        ? JSON["LN"]!.Value<String>()
                                        : null,
                                    JSON["LI"]?.Type is JTokenType.Integer or JTokenType.Float
-                                       ? JSON["LI"]!.Value<Decimal>()
+                                       ? JSON["LI"]!.AsDecimal()
                                        : null
                                );
 

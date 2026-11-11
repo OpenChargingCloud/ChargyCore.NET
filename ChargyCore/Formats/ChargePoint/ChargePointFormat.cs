@@ -570,7 +570,7 @@ namespace cloud.charging.open.chargy.Formats.ChargePoint
 
             => JSON?[Key]?.Type == JTokenType.Integer ||
                JSON?[Key]?.Type == JTokenType.Float
-                   ? JSON[Key]!.Value<Decimal>()
+                   ? JSON[Key]!.AsDecimal()
                    : null;
 
         #endregion

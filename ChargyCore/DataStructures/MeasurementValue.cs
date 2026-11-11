@@ -21,6 +21,8 @@ using System.Globalization;
 
 using Newtonsoft.Json.Linq;
 
+using org.GraphDefined.Vanaheimr.Illias;
+
 #endregion
 
 namespace cloud.charging.open.chargy
@@ -261,7 +263,7 @@ namespace cloud.charging.open.chargy
             if (JSON.Type == JTokenType.Integer ||
                 JSON.Type == JTokenType.Float)
             {
-                Value = JSON.Value<Decimal>();
+                Value = JSON.AsDecimal();
                 return true;
             }
 
